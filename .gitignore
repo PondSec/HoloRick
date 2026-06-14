@@ -1,0 +1,43 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Runtime databases / chats
+*.db
+*.sqlite
+*.sqlite3
+instance/
+data/
+
+# Uploads / user files
+uploads/
+static/uploads/
+static/audio/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtualenv
+.venv/
+venv/
+env/
+
+# Logs
+logs/
+*.log
+
+# macOS / IDE
+.DS_Store
+.vscode/
+.idea/
+
+# Docker/runtime
+*.pid
+update.lock
