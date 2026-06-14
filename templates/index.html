@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Holo Rick</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="side-top">
+      <button class="icon-btn mobile-only" id="closeSidebarBtn" title="Schließen" data-icon="x"></button>
+      <button class="icon-btn" id="newChatBtn" title="Neuer Chat" data-icon="edit-3"></button>
+    </div>
+    <div class="search-wrap"><span data-icon="search"></span><input id="chatSearch" placeholder="Suche"></div>
+    <button class="nav-pill active" id="homeBtn"><span data-icon="message-circle"></span><span>Holo Rick</span></button>
+    <button class="nav-pill" id="archiveBtn"><span data-icon="archive"></span><span>Archiv</span></button>
+    <div class="section-title" id="sectionTitle">Aktuelle</div>
+    <div class="chat-list" id="chatList"></div>
+    <div class="account" id="accountBtn">
+      <div class="account-avatar">JP</div>
+      <div><div id="accountName">Gast</div><small id="accountSub">Testzugang</small></div>
+    </div>
+  </aside>
+  <div class="backdrop" id="backdrop"></div>
+  <main class="main">
+    <header class="topbar">
+      <button class="icon-btn mobile-only" id="openSidebarBtn" data-icon="sidebar"></button>
+      <button class="model-pill">Holo Rick</button>
+      <div class="top-actions">
+        <button class="icon-btn" id="retitleBtn" title="Titel neu generieren" data-icon="sparkles"></button>
+        <button class="icon-btn" id="settingsBtn" title="Einstellungen" data-icon="settings"></button>
+      </div>
+    </header>
+    <section class="messages" id="messages"></section>
+    <div class="limit-banner hidden" id="limitBanner">Nutzungslimit erreicht. Für Zugang oder eine Partnerschaft kontaktieren Sie <a href="mailto:chat@pondsec.com">chat@pondsec.com</a>.</div>
+    <form class="composer" id="composerForm">
+      <input type="file" id="fileInput" multiple hidden accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.md,.py,.js,.ts,.html,.css,.json,.yml,.yaml,.toml,.log,.csv,image/*">
+      <button type="button" class="attach-btn" id="attachBtn" title="Dateien anhängen" data-icon="plus"></button>
+      <div class="composer-main">
+        <div class="attachments" id="attachments"></div>
+        <textarea id="messageInput" rows="1" placeholder="Nachricht an Holo Rick"></textarea>
+      </div>
+      <button class="send-btn" id="sendBtn" type="submit" data-icon="arrow-up"></button>
+    </form>
+    <div class="hint">Gäste: 3 Nachrichten pro öffentlicher IP, davon 1 mit Anhang. Ja, Limits, weil APIs Geld fressen.</div>
+  </main>
+</div>
+
+<div class="modal hidden" id="loginModal">
+  <div class="modal-card small-card">
+    <button class="modal-close" id="closeLoginBtn" data-icon="x"></button>
+    <h2>Anmelden</h2>
+    <p class="muted">Admin-Zugang für volle Nutzung, Chat-Historie und Uploads.</p>
+    <label>E-Mail</label><input class="input" id="loginEmail" value="joshua@pondsec.com">
+    <label>Passwort</label><input class="input" id="loginPassword" type="password" autocomplete="current-password">
+    <button class="primary full" id="loginBtn">Anmelden</button>
+    <button class="ghost full hidden" id="logoutBtn">Abmelden</button>
+  </div>
+</div>
+
+<div class="modal hidden" id="settingsModal">
+  <div class="modal-card settings-card tabs-card">
+    <div class="modal-head">
+      <div>
+        <h2>Einstellungen</h2>
+        <p class="muted">Sauber getrennt. Weil ein Einstellungsfenster keine Müllschublade sein muss.</p>
+      </div>
+      <button class="modal-close" id="closeSettingsBtn" data-icon="x"></button>
+    </div>
+
+    <div class="settings-layout">
+      <nav class="settings-tabs" id="settingsTabs">
+        <button class="settings-tab active" data-tab="model"><span data-icon="settings"></span><span>Modell</span></button>
+        <button class="settings-tab" data-tab="identity"><span data-icon="user"></span><span>Identität</span></button>
+        <button class="settings-tab" data-tab="limits"><span data-icon="shield"></span><span>Limits</span></button>
+        <button class="settings-tab" data-tab="ui"><span data-icon="sliders"></span><span>Oberfläche</span></button>
+        <button class="settings-tab" data-tab="prompt"><span data-icon="file-text"></span><span>Prompt</span></button>
+      </nav>
+
+      <div class="settings-pages">
+        <section class="settings-page active" data-page="model">
+          <div class="section-kicker">Modell & Antwort</div>
+          <div class="grid-2">
+            <div><label>Stilmodus</label><select class="input" id="styleMode"><option value="holo">Holo Rick</option><option value="clean">Clean</option><option value="technical">Technisch</option></select></div>
+            <div><label>Antwortlänge</label><select class="input" id="answerLength"><option value="kurz">Kurz</option><option value="normal">Normal</option><option value="ausführlich">Ausführlich</option></select></div>
+            <div><label>Temperatur</label><input class="input" id="temperature" type="number" step="0.05" min="0" max="1.5"></div>
+            <div><label>Max Tokens</label><input class="input" id="maxTokens" type="number" min="512" max="8192"></div>
+            <div><label>Kontext-Nachrichten</label><input class="input" id="contextMessages" type="number" min="2" max="40"></div>
+            <div><label>Modell</label><input class="input" id="modelName" readonly></div>
+          </div>
+        </section>
+
+        <section class="settings-page" data-page="identity">
+          <div class="section-kicker">Identität</div>
+          <div class="grid-2">
+            <div><label>Programmierer / Creator</label><input class="input" id="creatorName" placeholder="Joshua Dean Pond"></div>
+            <div><label>Betreiber / Brand</label><input class="input" id="brandOwner" placeholder="PondSec"></div>
+            <div><label>Kontakt für Gäste</label><input class="input" id="publicContact" placeholder="chat@pondsec.com"></div>
+          </div>
+        </section>
+
+        <section class="settings-page" data-page="limits">
+          <div class="section-kicker">Gastlimits</div>
+          <div class="grid-2">
+            <div><label>Nachrichten pro öffentlicher IP</label><input class="input" id="publicMessageLimit" type="number" min="1" max="20"></div>
+            <div><label>Nachrichten mit Anhang pro IP</label><input class="input" id="publicAttachmentLimit" type="number" min="0" max="10"></div>
+            <div><label>Titel-Wörter</label><input class="input" id="titleWords" type="number" min="1" max="4"></div>
+          </div>
+          <p class="setting-note">Hinweis: Diese Limits gelten für nicht angemeldete Gäste. Joshua/Admin ist davon nicht betroffen.</p>
+        </section>
+
+        <section class="settings-page" data-page="ui">
+          <div class="section-kicker">Verhalten & Oberfläche</div>
+          <div class="checks-grid">
+            <label class="check"><input type="checkbox" id="autoTitle"><span>Auto-Titel generieren</span></label>
+            <label class="check"><input type="checkbox" id="showTimestamps"><span>Zeitstempel anzeigen</span></label>
+            <label class="check"><input type="checkbox" id="enterSends"><span>Enter sendet</span></label>
+          </div>
+        </section>
+
+        <section class="settings-page" data-page="prompt">
+          <div class="section-kicker">System-Prompt</div>
+          <textarea class="textarea prompt-area" id="systemPrompt"></textarea>
+        </section>
+      </div>
+    </div>
+
+    <div class="modal-actions sticky-actions">
+      <button class="ghost" id="resetPromptBtn" type="button">Prompt zurücksetzen</button>
+      <button class="primary" id="saveSettingsBtn">Speichern</button>
+    </div>
+  </div>
+</div>
+<div class="toast hidden" id="toast"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
