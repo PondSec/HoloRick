@@ -86,6 +86,9 @@ DEFAULT_SETTINGS = {
     "title_words": "2",
     "show_timestamps": "false",
     "enter_sends": "true",
+    "smart_suggestions": "true",
+    "auto_scroll": "true",
+    "dense_mode": "false",
     "creator_name": "Joshua Dean Pond",
     "brand_owner": "PondSec",
     "public_contact": "chat@pondsec.com",
@@ -529,6 +532,65 @@ def delete_chat(chat_id):
         except Exception:
             pass
     return jsonify({"ok": True})
+
+@app.route("/api/chats/<int:chat_id>/export")
+def export_chat(chat_id):
+    if not is_logged_in():
+        return jsonify({"error": "Login erforderlich"}), 401
+    with db() as con:
+        row = con.execute("SELECT id,title,created_at,updated_at FROM chats WHERE id=?", (chat_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "Chat nicht gefunden"}), 404
+    lines = [f"# {row['title']}", "", f"Erstellt: {row['created_at']}", f"Aktualisiert: {row['updated_at']}", ""]
+    for m in fetch_messages(chat_id):
+        label = "Du" if m["role"] == "user" else "Holo Rick"
+        lines.extend([f"## {label}", "", m["content"].strip(), ""])
+    return jsonify({"title": row["title"], "markdown": "\n".join(lines).strip() + "\n"})
+
+
+@app.route("/api/chats/<int:chat_id>/regenerate", methods=["POST"])
+def regenerate(chat_id):
+    if not is_logged_in():
+        return jsonify({"error": "Login erforderlich"}), 401
+    history = fetch_messages(chat_id)
+    last_user_index = next((i for i in range(len(history) - 1, -1, -1) if history[i]["role"] == "user"), None)
+    if last_user_index is None:
+        return jsonify({"error": "Keine Nutzernachricht zum Neuversuchen"}), 400
+    last_user = history[last_user_index]
+    trimmed = history[:last_user_index]
+    try:
+        answer = call_llm(build_messages(trimmed, last_user["content"]))
+        with db() as con:
+            con.execute("DELETE FROM messages WHERE chat_id=? AND role='assistant' AND id > ?", (chat_id, last_user["id"]))
+            con.commit()
+        assistant_id = add_message(chat_id, "assistant", answer, {"regenerated": True})
+        return jsonify({"assistant_message": {"id": assistant_id, "role": "assistant", "content": answer, "created_at": now_iso(), "meta": json.dumps({"regenerated": True})}})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/suggestions", methods=["POST"])
+def suggestions():
+    data = request.get_json() or {}
+    seed = (data.get("message") or "").strip()
+    mode = get_setting("style_mode", "holo")
+    fallback = [
+        "Fass diesen Chat als konkrete To-do-Liste zusammen",
+        "Zeig mir die wichtigsten Annahmen und Risiken",
+        "Mach daraus eine saubere Schritt-für-Schritt-Anleitung",
+    ]
+    if not client or get_setting("smart_suggestions", "true") != "true":
+        return jsonify({"suggestions": fallback})
+    prompt = f"Erzeuge 3 kurze, deutsche Follow-up-Vorschläge für einen Chatbot. Stil: {mode}. Ohne Emojis, maximal 9 Wörter je Vorschlag. Kontext: {seed[:800]}"
+    try:
+        raw = call_llm([{"role": "system", "content": "Du lieferst ausschließlich JSON: {\"suggestions\":[...]}"}, {"role": "user", "content": prompt}], temperature=0.35, max_tokens=160)
+        start, end = raw.find('{'), raw.rfind('}')
+        parsed = json.loads(raw[start:end+1]) if start >= 0 and end > start else {}
+        items = [str(x).strip()[:90] for x in parsed.get("suggestions", []) if str(x).strip()]
+        return jsonify({"suggestions": (items[:3] or fallback)})
+    except Exception:
+        return jsonify({"suggestions": fallback})
+
 
 @app.route("/api/chats/<int:chat_id>/retitle", methods=["POST"])
 def retitle(chat_id):

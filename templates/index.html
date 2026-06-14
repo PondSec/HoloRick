@@ -29,16 +29,20 @@
       <button class="icon-btn mobile-only" id="openSidebarBtn" data-icon="sidebar"></button>
       <button class="model-pill">Holo Rick</button>
       <div class="top-actions">
+        <button class="icon-btn" id="exportBtn" title="Chat exportieren" data-icon="download"></button>
+        <button class="icon-btn" id="regenerateBtn" title="Letzte Antwort neu generieren" data-icon="refresh"></button>
         <button class="icon-btn" id="retitleBtn" title="Titel neu generieren" data-icon="sparkles"></button>
         <button class="icon-btn" id="settingsBtn" title="Einstellungen" data-icon="settings"></button>
       </div>
     </header>
     <section class="messages" id="messages"></section>
+    <button class="scroll-bottom hidden" id="scrollBottomBtn" title="Nach unten" data-icon="arrow-down"></button>
     <div class="limit-banner hidden" id="limitBanner">Nutzungslimit erreicht. Für Zugang oder eine Partnerschaft kontaktieren Sie <a href="mailto:chat@pondsec.com">chat@pondsec.com</a>.</div>
     <form class="composer" id="composerForm">
       <input type="file" id="fileInput" multiple hidden accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.md,.py,.js,.ts,.html,.css,.json,.yml,.yaml,.toml,.log,.csv,image/*">
       <button type="button" class="attach-btn" id="attachBtn" title="Dateien anhängen" data-icon="plus"></button>
       <div class="composer-main">
+        <div class="quick-prompts" id="quickPrompts"></div>
         <div class="attachments" id="attachments"></div>
         <textarea id="messageInput" rows="1" placeholder="Nachricht an Holo Rick"></textarea>
       </div>
@@ -117,6 +121,9 @@
             <label class="check"><input type="checkbox" id="autoTitle"><span>Auto-Titel generieren</span></label>
             <label class="check"><input type="checkbox" id="showTimestamps"><span>Zeitstempel anzeigen</span></label>
             <label class="check"><input type="checkbox" id="enterSends"><span>Enter sendet</span></label>
+            <label class="check"><input type="checkbox" id="smartSuggestions"><span>Smarte Folgefragen</span></label>
+            <label class="check"><input type="checkbox" id="autoScroll"><span>Auto-Scroll</span></label>
+            <label class="check"><input type="checkbox" id="denseMode"><span>Kompakter Modus</span></label>
           </div>
         </section>
 
