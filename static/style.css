@@ -29,3 +29,11 @@ textarea:focus,input:focus,select:focus{outline:2px solid var(--focus);outline-o
 .copy-msg,.copy-code{border-radius:999px!important}.limit-banner{border:1px solid rgba(255,255,255,.08);background:rgba(125,211,252,.08)}
 @media(max-width:720px){.top-actions{gap:2px}.prompt-strip{width:calc(100% - 18px);padding-bottom:2px}.prompt-strip button{padding:8px 10px}.model-pill{max-width:140px;overflow:hidden;text-overflow:ellipsis}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+
+/* v6 fixes: visible toolbar icon, usable shortcuts above composer, no overlap */
+.icon-btn svg{width:18px;height:18px;display:block;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;opacity:1}
+.prompt-strip{position:absolute;left:50%;bottom:108px;transform:translateX(-50%);z-index:5;justify-content:center;pointer-events:auto;background:linear-gradient(90deg,transparent,rgba(31,31,31,.76) 8%,rgba(31,31,31,.76) 92%,transparent);padding:0 10px}
+.prompt-strip button{background:rgba(255,255,255,.035);backdrop-filter:blur(10px)}
+.hint{bottom:10px;z-index:1}.composer{z-index:6}.limit-banner{z-index:7}
+.messages{padding-bottom:210px}
+@media(max-width:720px){.prompt-strip{bottom:100px;justify-content:flex-start;width:calc(100% - 18px);padding:0 4px}.messages{padding-bottom:200px}.hint{display:none}}

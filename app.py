@@ -67,6 +67,8 @@ if os.environ.get("TRUST_PROXY", "false").lower() == "true":
 @app.before_request
 def request_guard():
     g.started_at = time.perf_counter()
+    if request.endpoint == "login":
+        return None
     if request.method in {"POST", "PUT", "DELETE", "PATCH"}:
         token = session.get("csrf_token")
         sent = request.headers.get("X-CSRF-Token") or request.form.get("csrf_token")
@@ -350,8 +352,8 @@ def call_llm(messages, temperature=None, max_tokens=None) -> str:
     return completion.choices[0].message.content or ""
 
 
-def generate_title(user_text: str, answer_text: str = "") -> str:
-    if get_setting("auto_title", "true") != "true":
+def generate_title(user_text: str, answer_text: str = "", force: bool = False) -> str:
+    if not force and get_setting("auto_title", "true") != "true":
         return "Neuer Chat"
     words = max(1, min(int(get_setting("title_words", "2") or 2), 4))
     fallback = user_text.strip().split("\n")[0][:28] or "Chat"
@@ -575,7 +577,7 @@ def retitle(chat_id):
     messages = fetch_messages(chat_id)
     user = next((m["content"] for m in messages if m["role"] == "user"), "")
     assistant = next((m["content"] for m in messages if m["role"] == "assistant"), "")
-    title = generate_title(user, assistant)
+    title = generate_title(user, assistant, force=True)
     with db() as con:
         con.execute("UPDATE chats SET title=?, updated_at=? WHERE id=?", (title, now_iso(), chat_id))
         con.commit()
@@ -620,7 +622,7 @@ def send():
                     con.execute("UPDATE uploads SET chat_id=?, message_id=? WHERE id=?", (chat_id, user_id, u["id"]))
                     con.commit()
             if len(history) == 0:
-                title = generate_title(text, answer)
+                title = generate_title(text, answer, force=True)
                 with db() as con:
                     con.execute("UPDATE chats SET title=? WHERE id=?", (title, chat_id))
                     con.commit()
