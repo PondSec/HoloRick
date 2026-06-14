@@ -24,9 +24,40 @@ INSTANCE_DIR.mkdir(exist_ok=True)
 UPLOAD_DIR.mkdir(exist_ok=True)
 load_dotenv(BASE_DIR / ".env")
 
+def load_secret_key() -> str:
+    configured = os.environ.get("FLASK_SECRET_KEY", "").strip()
+    if configured:
+        return configured
+
+    # A random in-memory key breaks sessions as soon as a request lands on a
+    # different gunicorn worker or the container restarts. Keep a generated key
+    # in the persisted instance directory so login behaves the same behind the
+    # public reverse proxy as it does during a single-process local run.
+    secret_file = INSTANCE_DIR / "flask_secret_key"
+    try:
+        if secret_file.exists():
+            existing = secret_file.read_text(encoding="utf-8").strip()
+            if existing:
+                return existing
+        generated = os.urandom(32).hex()
+        secret_file.write_text(generated, encoding="utf-8")
+        try:
+            secret_file.chmod(0o600)
+        except OSError:
+            pass
+        return generated
+    except OSError:
+        # Last-resort fallback for read-only environments. This is intentionally
+        # not the normal path because it cannot support multi-worker sessions.
+        return os.urandom(32).hex()
+
+
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET_KEY") or os.urandom(32).hex()
+app.secret_key = load_secret_key()
 app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_UPLOAD_MB", "12")) * 1024 * 1024
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = os.environ.get("SESSION_COOKIE_SAMESITE", "Lax")
+app.config["SESSION_COOKIE_SECURE"] = os.environ.get("SESSION_COOKIE_SECURE", "false").lower() == "true"
 if os.environ.get("TRUST_PROXY", "false").lower() == "true":
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 
