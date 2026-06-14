@@ -64,6 +64,7 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
 
         proxy_read_timeout 120s;
         proxy_send_timeout 120s;
@@ -75,6 +76,15 @@ server {
     add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
 }
 ```
+
+Wenn HTTPS am Reverse Proxy terminiert wird, setze in der App zusätzlich:
+
+```env
+TRUST_PROXY=true
+SESSION_COOKIE_SECURE=true
+```
+
+Das sorgt dafür, dass Flask die weitergereichten Proxy-Header auswertet und Browser-Cookies nur über HTTPS sendet.
 
 TLS dann z.B. mit Certbot:
 

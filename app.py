@@ -64,16 +64,28 @@ app.config["PERMANENT_SESSION_LIFETIME"] = 60 * 60 * 8
 if os.environ.get("TRUST_PROXY", "false").lower() == "true":
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 
+
+def csrf_token() -> str:
+    token = session.get("csrf_token")
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session["csrf_token"] = token
+    return token
+
+
 @app.before_request
 def request_guard():
     g.started_at = time.perf_counter()
     if request.endpoint == "login":
         return None
     if request.method in {"POST", "PUT", "DELETE", "PATCH"}:
-        token = session.get("csrf_token")
+        token = csrf_token()
         sent = request.headers.get("X-CSRF-Token") or request.form.get("csrf_token")
-        if token and not hmac.compare_digest(sent or "", token):
-            return jsonify({"error": "Sicherheitsprüfung fehlgeschlagen. Seite neu laden."}), 403
+        if not hmac.compare_digest(sent or "", token):
+            return jsonify({
+                "error": "Sicherheitsprüfung fehlgeschlagen. Seite neu laden.",
+                "csrf_token": token,
+            }), 403
 
 
 @app.after_request
@@ -478,7 +490,7 @@ def me():
         "public_attachment_limit": limits["attachment_limit"],
         "public_messages_used": limits["messages_used"],
         "public_attachments_used": limits["attachments_used"],
-        "csrf_token": session.setdefault("csrf_token", secrets.token_urlsafe(32)),
+        "csrf_token": csrf_token(),
     })
 
 
