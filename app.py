@@ -6,11 +6,13 @@ import sqlite3
 import subprocess
 import threading
 import time
+import secrets
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request, session, send_from_directory
+from flask import Flask, jsonify, render_template, request, session, send_from_directory, g
 from groq import Groq
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -58,8 +60,29 @@ app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_UPLOAD_MB", "12")) * 
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = os.environ.get("SESSION_COOKIE_SAMESITE", "Lax")
 app.config["SESSION_COOKIE_SECURE"] = os.environ.get("SESSION_COOKIE_SECURE", "false").lower() == "true"
+app.config["PERMANENT_SESSION_LIFETIME"] = 60 * 60 * 8
 if os.environ.get("TRUST_PROXY", "false").lower() == "true":
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
+
+@app.before_request
+def request_guard():
+    g.started_at = time.perf_counter()
+    if request.method in {"POST", "PUT", "DELETE", "PATCH"}:
+        token = session.get("csrf_token")
+        sent = request.headers.get("X-CSRF-Token") or request.form.get("csrf_token")
+        if token and not hmac.compare_digest(sent or "", token):
+            return jsonify({"error": "Sicherheitsprüfung fehlgeschlagen. Seite neu laden."}), 403
+
+
+@app.after_request
+def harden_response(response):
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    response.headers.setdefault("Content-Security-Policy", "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'")
+    response.headers["X-Response-Time"] = f"{(time.perf_counter() - getattr(g, 'started_at', time.perf_counter())) * 1000:.1f}ms"
+    return response
 
 MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
@@ -91,11 +114,22 @@ DEFAULT_SETTINGS = {
     "public_contact": "chat@pondsec.com",
     "public_message_limit": "3",
     "public_attachment_limit": "1",
+    "privacy_mode": "true",
+    "safe_uploads": "true",
 }
+
+DEFAULT_ALLOWED_UPLOADS = {"png","jpg","jpeg","gif","webp","pdf","txt","md","py","js","ts","html","css","json","yml","yaml","toml","log","csv"}
+MAX_FILES_PER_MESSAGE = 5
+MAX_TEXT_CHARS = 24000
 
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def sanitize_text(value: str, limit: int = MAX_TEXT_CHARS) -> str:
+    value = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", value or "")
+    return value[:limit].strip()
 
 
 def db():
@@ -351,6 +385,8 @@ def clean_title(title: str, max_words: int) -> str:
 def allowed_file(filename: str) -> bool:
     allowed = {x.strip().lower() for x in os.environ.get("ALLOWED_UPLOAD_EXTENSIONS", "").split(",") if x.strip()}
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    if not allowed:
+        allowed = DEFAULT_ALLOWED_UPLOADS
     return ext in allowed
 
 
@@ -440,6 +476,7 @@ def me():
         "public_attachment_limit": limits["attachment_limit"],
         "public_messages_used": limits["messages_used"],
         "public_attachments_used": limits["attachments_used"],
+        "csrf_token": session.setdefault("csrf_token", secrets.token_urlsafe(32)),
     })
 
 
@@ -448,6 +485,7 @@ def login():
     data = request.get_json() or {}
     if verify_admin(data.get("email", ""), data.get("password", "")):
         session.clear()
+        session["csrf_token"] = secrets.token_urlsafe(32)
         session["auth"] = True
         session["email"] = admin_email()
         return jsonify({"ok": True})
@@ -547,7 +585,7 @@ def retitle(chat_id):
 @app.route("/api/send", methods=["POST"])
 def send():
     data = request.form if request.content_type and request.content_type.startswith("multipart/form-data") else (request.get_json() or {})
-    text = (data.get("message") or "").strip()
+    text = sanitize_text(data.get("message") or "")
     chat_id = int(data.get("chat_id") or 0)
     has_attachment = bool(request.files.getlist("files"))
     if public_limit_reached(has_attachment=has_attachment):
@@ -562,7 +600,10 @@ def send():
             chat_id = create_chat("Neuer Chat")
         history = fetch_messages(chat_id)
     upload_infos = []
-    for f in request.files.getlist("files"):
+    files = request.files.getlist("files")[:MAX_FILES_PER_MESSAGE]
+    if len(request.files.getlist("files")) > MAX_FILES_PER_MESSAGE:
+        return jsonify({"error": f"Maximal {MAX_FILES_PER_MESSAGE} Dateien pro Nachricht"}), 400
+    for f in files:
         upload_infos.append(save_upload(f, chat_id if chat_id else None, None))
     ctx = attachment_context(upload_infos)
     messages = build_messages(history, text, ctx)
@@ -601,6 +642,32 @@ def uploads(name):
         return jsonify({"error": "Login erforderlich"}), 401
     return send_from_directory(UPLOAD_DIR, name)
 
+
+
+@app.route("/api/chats/<int:chat_id>/export")
+def export_chat(chat_id):
+    if not is_logged_in():
+        return jsonify({"error": "Login erforderlich"}), 401
+    with db() as con:
+        chat = con.execute("SELECT id,title,created_at,updated_at FROM chats WHERE id=?", (chat_id,)).fetchone()
+    if not chat:
+        return jsonify({"error": "Chat nicht gefunden"}), 404
+    messages = fetch_messages(chat_id)
+    return jsonify({"chat": dict(chat), "messages": messages, "exported_at": now_iso()})
+
+
+@app.route("/api/chats/<int:chat_id>/summarize", methods=["POST"])
+def summarize_chat(chat_id):
+    if not is_logged_in():
+        return jsonify({"error": "Login erforderlich"}), 401
+    messages = fetch_messages(chat_id)
+    transcript = "\n".join(f"{m['role']}: {m['content']}" for m in messages[-20:])
+    summary = call_llm([
+        {"role": "system", "content": "Fasse den Chat in Deutsch als kurze, klare Arbeitsnotiz zusammen: Ziel, wichtige Fakten, offene nächste Schritte."},
+        {"role": "user", "content": transcript[:12000]},
+    ], temperature=0.2, max_tokens=700)
+    add_message(chat_id, "assistant", "**Kurznotiz**\n\n" + summary)
+    return jsonify({"summary": summary})
 
 @app.route("/api/update", methods=["POST"])
 def update():
