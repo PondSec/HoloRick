@@ -6,6 +6,7 @@ import sqlite3
 import subprocess
 import threading
 import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -58,6 +59,7 @@ app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_UPLOAD_MB", "12")) * 
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = os.environ.get("SESSION_COOKIE_SAMESITE", "Lax")
 app.config["SESSION_COOKIE_SECURE"] = os.environ.get("SESSION_COOKIE_SECURE", "false").lower() == "true"
+app.config["UPLOAD_EXTENSIONS"] = os.environ.get("ALLOWED_UPLOAD_EXTENSIONS", "png,jpg,jpeg,gif,webp,pdf,txt,md,py,js,ts,html,css,json,yml,yaml,toml,log,csv")
 if os.environ.get("TRUST_PROXY", "false").lower() == "true":
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 
@@ -91,6 +93,7 @@ DEFAULT_SETTINGS = {
     "public_contact": "chat@pondsec.com",
     "public_message_limit": "3",
     "public_attachment_limit": "1",
+    "public_identity_salt": "",
 }
 
 
@@ -151,6 +154,12 @@ def init_db():
             con.execute("ALTER TABLE public_usage ADD COLUMN attachment_count INTEGER NOT NULL DEFAULT 0")
         except sqlite3.OperationalError:
             pass
+        try:
+            con.execute("ALTER TABLE public_usage ADD COLUMN identity_hash TEXT")
+        except sqlite3.OperationalError:
+            pass
+        con.execute("DROP INDEX IF EXISTS idx_public_usage_identity_hash")
+        con.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_public_usage_identity_hash ON public_usage(identity_hash)")
         for k, v in DEFAULT_SETTINGS.items():
             con.execute("INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)", (k, v))
         con.commit()
@@ -197,14 +206,57 @@ def ip_hash(ip: str) -> str:
     return hmac.new(secret.encode(), ip.encode(), hashlib.sha256).hexdigest()
 
 
+def get_or_create_identity_salt() -> str:
+    salt = get_setting("public_identity_salt", "").strip()
+    if salt:
+        return salt
+    salt = os.urandom(32).hex()
+    set_setting("public_identity_salt", salt)
+    return salt
+
+
+def sign_guest_token(token: str) -> str:
+    sig = hmac.new(app.secret_key.encode(), token.encode(), hashlib.sha256).hexdigest()
+    return f"{token}.{sig}"
+
+
+def verify_guest_token(value: str) -> str:
+    token, _, sig = (value or "").partition(".")
+    if not token or not sig or len(token) > 80:
+        return ""
+    expected = hmac.new(app.secret_key.encode(), token.encode(), hashlib.sha256).hexdigest()
+    return token if hmac.compare_digest(sig, expected) else ""
+
+
+def public_identity_token() -> str:
+    header_token = verify_guest_token(request.headers.get("X-Guest-Token", ""))
+    cookie_token = verify_guest_token(request.cookies.get("hr_guest", ""))
+    session_token = session.get("guest_token", "")
+    token = header_token or cookie_token or session_token
+    if not token:
+        token = uuid.uuid4().hex
+    session["guest_token"] = token
+    return token
+
+
+def public_identity_hash() -> str:
+    raw = "|".join([
+        public_identity_token(),
+        (request.headers.get("User-Agent") or "")[:220],
+        (request.headers.get("Accept-Language") or "")[:120],
+    ])
+    return hmac.new(get_or_create_identity_salt().encode(), raw.encode(), hashlib.sha256).hexdigest()
+
+
 def public_limits() -> dict:
     msg_limit = int(get_setting("public_message_limit", os.environ.get("PUBLIC_MESSAGE_LIMIT", "3")) or 3)
     attachment_limit = int(get_setting("public_attachment_limit", os.environ.get("PUBLIC_ATTACHMENT_LIMIT", "1")) or 1)
     if is_logged_in():
         return {"message_limit": msg_limit, "attachment_limit": attachment_limit, "messages_used": 0, "attachments_used": 0, "message_limit_reached": False, "attachment_limit_reached": False}
-    key = ip_hash(client_ip())
+    key = public_identity_hash()
+    legacy_key = ip_hash(client_ip())
     with db() as con:
-        row = con.execute("SELECT count, attachment_count FROM public_usage WHERE ip_hash=?", (key,)).fetchone()
+        row = con.execute("SELECT count, attachment_count FROM public_usage WHERE identity_hash=? OR ip_hash=? ORDER BY identity_hash IS NULL ASC LIMIT 1", (key, legacy_key)).fetchone()
     used = int(row["count"]) if row else 0
     attach_used = int(row["attachment_count"]) if row else 0
     return {
@@ -227,16 +279,16 @@ def public_limit_reached(has_attachment: bool = False) -> bool:
 def increment_public_usage(has_attachment: bool = False):
     if is_logged_in():
         return
-    key = ip_hash(client_ip())
+    identity_key = public_identity_hash()
     ts = now_iso()
     add_attachment = 1 if has_attachment else 0
     with db() as con:
         con.execute(
             """
-            INSERT INTO public_usage(ip_hash,count,attachment_count,first_seen,last_seen) VALUES(?,?,?,?,?)
-            ON CONFLICT(ip_hash) DO UPDATE SET count=count+1, attachment_count=attachment_count+excluded.attachment_count, last_seen=excluded.last_seen
+            INSERT INTO public_usage(ip_hash,identity_hash,count,attachment_count,first_seen,last_seen) VALUES(?,?,?,?,?,?)
+            ON CONFLICT(identity_hash) DO UPDATE SET count=count+1, attachment_count=attachment_count+excluded.attachment_count, last_seen=excluded.last_seen
             """,
-            (key, 1, add_attachment, ts, ts),
+            (identity_key, identity_key, 1, add_attachment, ts, ts),
         )
         con.commit()
 
@@ -349,7 +401,7 @@ def clean_title(title: str, max_words: int) -> str:
 
 
 def allowed_file(filename: str) -> bool:
-    allowed = {x.strip().lower() for x in os.environ.get("ALLOWED_UPLOAD_EXTENSIONS", "").split(",") if x.strip()}
+    allowed = {x.strip().lower() for x in app.config["UPLOAD_EXTENSIONS"].split(",") if x.strip()}
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
     return ext in allowed
 
@@ -431,7 +483,7 @@ def index():
 @app.route("/api/me")
 def me():
     limits = public_limits()
-    return jsonify({
+    response = jsonify({
         "authenticated": is_logged_in(),
         "email": admin_email() if is_logged_in() else None,
         "public_limit_reached": limits["message_limit_reached"],
@@ -440,12 +492,16 @@ def me():
         "public_attachment_limit": limits["attachment_limit"],
         "public_messages_used": limits["messages_used"],
         "public_attachments_used": limits["attachments_used"],
+        "guest_token": sign_guest_token(session.get("guest_token") or public_identity_token()) if not is_logged_in() else None,
     })
+    if not is_logged_in():
+        response.set_cookie("hr_guest", sign_guest_token(session.get("guest_token") or public_identity_token()), max_age=60*60*24*365, httponly=True, samesite="Lax", secure=app.config["SESSION_COOKIE_SECURE"])
+    return response
 
 
 @app.route("/api/login", methods=["POST"])
 def login():
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
     if verify_admin(data.get("email", ""), data.get("password", "")):
         session.clear()
         session["auth"] = True
@@ -467,7 +523,7 @@ def settings():
         return jsonify({"error": "Login erforderlich"}), 401
     if request.method == "GET":
         return jsonify({"model": MODEL, **{k: get_setting(k, v) for k, v in DEFAULT_SETTINGS.items()}})
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
     for k in DEFAULT_SETTINGS:
         if k in data:
             set_setting(k, str(data[k]))
@@ -506,7 +562,7 @@ def chat_detail(chat_id):
 def archive_chat(chat_id):
     if not is_logged_in():
         return jsonify({"error": "Login erforderlich"}), 401
-    archived = 1 if (request.get_json() or {}).get("archived", True) else 0
+    archived = 1 if (request.get_json(silent=True) or {}).get("archived", True) else 0
     with db() as con:
         con.execute("UPDATE chats SET archived=?, updated_at=? WHERE id=?", (archived, now_iso(), chat_id))
         con.commit()
@@ -530,6 +586,65 @@ def delete_chat(chat_id):
             pass
     return jsonify({"ok": True})
 
+@app.route("/api/chats/<int:chat_id>/export")
+def export_chat(chat_id):
+    if not is_logged_in():
+        return jsonify({"error": "Login erforderlich"}), 401
+    with db() as con:
+        row = con.execute("SELECT id,title,created_at,updated_at FROM chats WHERE id=?", (chat_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "Chat nicht gefunden"}), 404
+    lines = [f"# {row['title']}", "", f"Erstellt: {row['created_at']}", f"Aktualisiert: {row['updated_at']}", ""]
+    for m in fetch_messages(chat_id):
+        label = "Du" if m["role"] == "user" else "Holo Rick"
+        lines.extend([f"## {label}", "", m["content"].strip(), ""])
+    return jsonify({"title": row["title"], "markdown": "\n".join(lines).strip() + "\n"})
+
+
+@app.route("/api/chats/<int:chat_id>/regenerate", methods=["POST"])
+def regenerate(chat_id):
+    if not is_logged_in():
+        return jsonify({"error": "Login erforderlich"}), 401
+    history = fetch_messages(chat_id)
+    last_user_index = next((i for i in range(len(history) - 1, -1, -1) if history[i]["role"] == "user"), None)
+    if last_user_index is None:
+        return jsonify({"error": "Keine Nutzernachricht zum Neuversuchen"}), 400
+    last_user = history[last_user_index]
+    trimmed = history[:last_user_index]
+    try:
+        answer = call_llm(build_messages(trimmed, last_user["content"]))
+        with db() as con:
+            con.execute("DELETE FROM messages WHERE chat_id=? AND role='assistant' AND id > ?", (chat_id, last_user["id"]))
+            con.commit()
+        assistant_id = add_message(chat_id, "assistant", answer, {"regenerated": True})
+        return jsonify({"assistant_message": {"id": assistant_id, "role": "assistant", "content": answer, "created_at": now_iso(), "meta": json.dumps({"regenerated": True})}})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/suggestions", methods=["POST"])
+def suggestions():
+    data = request.get_json(silent=True) or {}
+    seed = (data.get("message") or "").strip()
+    mode = get_setting("style_mode", "holo")
+    fallback = [
+        "Fass diesen Chat als konkrete To-do-Liste zusammen",
+        "Zeig mir die wichtigsten Annahmen und Risiken",
+        "Mach daraus eine saubere Schritt-für-Schritt-Anleitung",
+    ]
+    if not client or get_setting("smart_suggestions", "true") != "true":
+        return jsonify({"suggestions": fallback})
+    prompt = f"Erzeuge 3 kurze, deutsche Follow-up-Vorschläge für einen Chatbot. Stil: {mode}. Ohne Emojis, maximal 9 Wörter je Vorschlag. Kontext: {seed[:800]}"
+    try:
+        raw = call_llm([{"role": "system", "content": "Du lieferst ausschließlich JSON: {\"suggestions\":[...]}"}, {"role": "user", "content": prompt}], temperature=0.35, max_tokens=160)
+        start, end = raw.find('{'), raw.rfind('}')
+        parsed = json.loads(raw[start:end+1]) if start >= 0 and end > start else {}
+        items = [str(x).strip()[:90] for x in parsed.get("suggestions", []) if str(x).strip()]
+        return jsonify({"suggestions": (items[:3] or fallback)})
+    except Exception:
+        return jsonify({"suggestions": fallback})
+
+
 @app.route("/api/chats/<int:chat_id>/retitle", methods=["POST"])
 def retitle(chat_id):
     if not is_logged_in():
@@ -546,10 +661,11 @@ def retitle(chat_id):
 
 @app.route("/api/send", methods=["POST"])
 def send():
-    data = request.form if request.content_type and request.content_type.startswith("multipart/form-data") else (request.get_json() or {})
+    data = request.form if request.form else (request.get_json(silent=True) or {})
     text = (data.get("message") or "").strip()
     chat_id = int(data.get("chat_id") or 0)
-    has_attachment = bool(request.files.getlist("files"))
+    incoming_files = [f for f in request.files.getlist("files") if f and f.filename]
+    has_attachment = bool(incoming_files)
     if public_limit_reached(has_attachment=has_attachment):
         return jsonify({"error": "PUBLIC_LIMIT", "message": "Nutzungslimit erreicht"}), 429
     if not text and not has_attachment:
@@ -562,7 +678,10 @@ def send():
             chat_id = create_chat("Neuer Chat")
         history = fetch_messages(chat_id)
     upload_infos = []
-    for f in request.files.getlist("files"):
+    max_files = int(os.environ.get("MAX_UPLOAD_FILES", "5"))
+    if len(incoming_files) > max_files:
+        return jsonify({"error": f"Maximal {max_files} Anhänge pro Nachricht"}), 400
+    for f in incoming_files:
         upload_infos.append(save_upload(f, chat_id if chat_id else None, None))
     ctx = attachment_context(upload_infos)
     messages = build_messages(history, text, ctx)
