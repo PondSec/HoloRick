@@ -24,6 +24,7 @@ let csrfToken = '';
 let aiMode = 'holo';
 let responseFormat = 'auto';
 let currentChatHasContext = false;
+const guestTokenKey = 'holo_rick_guest_token';
 
 const modeLabels = {
   holo: 'Holo Rick',
@@ -88,13 +89,17 @@ function injectIcons(root = document) {
 }
 
 async function refreshCsrfToken() {
+  const token = localStorage.getItem(guestTokenKey);
+  const headers = { 'Accept': 'application/json' };
+  if (token) headers['X-Guest-Token'] = token;
   const r = await fetch('/api/me', {
     credentials: 'same-origin',
     cache: 'no-store',
-    headers: { 'Accept': 'application/json' }
+    headers
   });
   const d = await r.json().catch(() => ({}));
   if (d.csrf_token) csrfToken = d.csrf_token;
+  if (d.guest_token) localStorage.setItem(guestTokenKey, d.guest_token);
   return d;
 }
 
@@ -108,6 +113,8 @@ async function api(path, opt = {}, retry = true) {
     await refreshCsrfToken();
   }
   const headers = new Headers(opt.headers || {});
+  const guestToken = localStorage.getItem(guestTokenKey);
+  if (guestToken) headers.set('X-Guest-Token', guestToken);
   if (!['GET', 'HEAD', 'OPTIONS'].includes(method) && csrfToken) {
     headers.set('X-CSRF-Token', csrfToken);
   }
@@ -122,6 +129,7 @@ async function api(path, opt = {}, retry = true) {
     }
   }
   if (d.csrf_token) csrfToken = d.csrf_token;
+  if (d.guest_token) localStorage.setItem(guestTokenKey, d.guest_token);
   if (!r.ok && retry && isCsrfError(r.status, d)) {
     await refreshCsrfToken();
     return api(path, opt, false);
@@ -512,7 +520,10 @@ function renderAttachments() {
     const chip = document.createElement('button');
     chip.type = 'button';
     chip.className = 'file-chip';
-    chip.innerHTML = `${icons.file}<span>${esc(f.name)}</span><b>×</b>`;
+    const preview = f.type && f.type.startsWith('image/')
+      ? `<img src="${URL.createObjectURL(f)}" alt="">`
+      : icons.file;
+    chip.innerHTML = `${preview}<span>${esc(f.name)}</span><b>×</b>`;
     chip.onclick = () => {
       selectedFiles.splice(i, 1);
       renderAttachments();

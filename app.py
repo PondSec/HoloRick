@@ -11,6 +11,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -109,6 +110,7 @@ DEFAULT_SETTINGS = {
     "public_contact": "chat@pondsec.com",
     "public_message_limit": "3",
     "public_attachment_limit": "1",
+    "public_identity_salt": "",
 }
 
 MARKDOWN_TAGS = {
@@ -315,6 +317,7 @@ def init_db():
             );
             CREATE TABLE IF NOT EXISTS public_usage(
                 ip_hash TEXT PRIMARY KEY,
+                identity_hash TEXT,
                 count INTEGER NOT NULL DEFAULT 0,
                 attachment_count INTEGER NOT NULL DEFAULT 0,
                 first_seen TEXT NOT NULL,
@@ -349,6 +352,7 @@ def init_db():
             ("chats", "context_updated_at", "TEXT"),
             ("messages", "user_id", "INTEGER"),
             ("public_usage", "attachment_count", "INTEGER NOT NULL DEFAULT 0"),
+            ("public_usage", "identity_hash", "TEXT"),
             ("uploads", "user_id", "INTEGER"),
             ("users", "consent_at", "TEXT"),
             ("users", "privacy_version", "TEXT"),
@@ -379,6 +383,8 @@ def init_db():
         con.execute("CREATE INDEX IF NOT EXISTS idx_chats_user_updated ON chats(user_id,archived,updated_at)")
         con.execute("CREATE INDEX IF NOT EXISTS idx_messages_chat_user ON messages(chat_id,user_id,id)")
         con.execute("CREATE INDEX IF NOT EXISTS idx_uploads_user_stored ON uploads(user_id,stored_name)")
+        con.execute("DROP INDEX IF EXISTS idx_public_usage_identity_hash")
+        con.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_public_usage_identity_hash ON public_usage(identity_hash)")
         for k, v in DEFAULT_SETTINGS.items():
             con.execute("INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)", (k, v))
         con.commit()
@@ -516,6 +522,50 @@ def client_ip() -> str:
 def ip_hash(ip: str) -> str:
     secret = os.environ.get("IP_HASH_SECRET", app.secret_key)
     return hmac.new(secret.encode(), ip.encode(), hashlib.sha256).hexdigest()
+
+
+def get_or_create_identity_salt() -> str:
+    salt = get_setting("public_identity_salt", "").strip()
+    if salt:
+        return salt
+    salt = os.urandom(32).hex()
+    set_setting("public_identity_salt", salt)
+    return salt
+
+
+def sign_guest_token(token: str) -> str:
+    sig = hmac.new(app.secret_key.encode(), token.encode(), hashlib.sha256).hexdigest()
+    return f"{token}.{sig}"
+
+
+def verify_guest_token(value: str) -> str:
+    token, _, sig = str(value or "").partition(".")
+    if not token or not sig or len(token) > 80:
+        return ""
+    expected = hmac.new(app.secret_key.encode(), token.encode(), hashlib.sha256).hexdigest()
+    return token if hmac.compare_digest(sig, expected) else ""
+
+
+def public_identity_token() -> str:
+    header_token = verify_guest_token(request.headers.get("X-Guest-Token", ""))
+    cookie_token = verify_guest_token(request.cookies.get("hr_guest", ""))
+    session_token = str(session.get("guest_token") or "")
+    token = header_token or cookie_token or session_token
+    if not token:
+        token = uuid.uuid4().hex
+    session["guest_token"] = token
+    return token
+
+
+def public_identity_hash() -> str:
+    raw = "|".join(
+        [
+            public_identity_token(),
+            (request.headers.get("User-Agent") or "")[:220],
+            (request.headers.get("Accept-Language") or "")[:120],
+        ]
+    )
+    return hmac.new(get_or_create_identity_salt().encode(), raw.encode(), hashlib.sha256).hexdigest()
 
 
 def csrf_token() -> str:
@@ -684,9 +734,19 @@ def public_limits() -> dict:
             "message_limit_reached": False,
             "attachment_limit_reached": False,
         }
-    key = ip_hash(client_ip())
+    identity_key = public_identity_hash()
+    legacy_key = ip_hash(client_ip())
     with db() as con:
-        row = con.execute("SELECT count, attachment_count FROM public_usage WHERE ip_hash=?", (key,)).fetchone()
+        row = con.execute(
+            """
+            SELECT count, attachment_count
+            FROM public_usage
+            WHERE identity_hash=? OR ip_hash=?
+            ORDER BY identity_hash IS NULL ASC
+            LIMIT 1
+            """,
+            (identity_key, legacy_key),
+        ).fetchone()
     used = int(row["count"]) if row else 0
     attach_used = int(row["attachment_count"]) if row else 0
     return {
@@ -709,17 +769,25 @@ def public_limit_reached(has_attachment: bool = False) -> bool:
 def increment_public_usage(has_attachment: bool = False):
     if is_logged_in():
         return
-    key = ip_hash(client_ip())
+    identity_key = public_identity_hash()
     ts = now_iso()
     add_attachment = 1 if has_attachment else 0
     with db() as con:
         con.execute(
             """
-            INSERT INTO public_usage(ip_hash,count,attachment_count,first_seen,last_seen) VALUES(?,?,?,?,?)
+            INSERT INTO public_usage(ip_hash,identity_hash,count,attachment_count,first_seen,last_seen) VALUES(?,?,?,?,?,?)
             ON CONFLICT(ip_hash) DO UPDATE SET count=count+1,
             attachment_count=attachment_count+excluded.attachment_count, last_seen=excluded.last_seen
             """,
-            (key, 1, add_attachment, ts, ts),
+            (identity_key, identity_key, 1, add_attachment, ts, ts),
+        )
+        con.execute(
+            """
+            UPDATE public_usage
+            SET count=count+?, attachment_count=attachment_count+?, last_seen=?
+            WHERE identity_hash=? AND ip_hash<>?
+            """,
+            (1, add_attachment, ts, identity_key, identity_key),
         )
         con.commit()
 
@@ -1494,7 +1562,8 @@ def index():
 def me():
     limits = public_limits()
     user = current_user()
-    return jsonify(
+    guest_token = None if user else sign_guest_token(session.get("guest_token") or public_identity_token())
+    response = jsonify(
         {
             "authenticated": bool(user),
             "email": user["email"] if user else None,
@@ -1511,8 +1580,19 @@ def me():
             "public_attachment_limit": limits["attachment_limit"],
             "public_messages_used": limits["messages_used"],
             "public_attachments_used": limits["attachments_used"],
+            "guest_token": guest_token,
         }
     )
+    if guest_token:
+        response.set_cookie(
+            "hr_guest",
+            guest_token,
+            max_age=60 * 60 * 24 * 365,
+            httponly=True,
+            samesite="Lax",
+            secure=app.config["SESSION_COOKIE_SECURE"],
+        )
+    return response
 
 
 @app.route("/api/login", methods=["POST"])
