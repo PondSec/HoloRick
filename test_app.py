@@ -57,3 +57,44 @@ def test_guest_text_attachment_upload_works(monkeypatch):
     r = c.post("/api/send", data=data, content_type="multipart/form-data", headers=headers)
     assert r.status_code == 200
     assert r.get_json()["assistant_message"]["content"] == "saw file"
+
+
+def test_long_history_is_compacted_before_provider_call(monkeypatch):
+    captured = {}
+
+    class FakeMessage:
+        content = "ok"
+
+    class FakeChoice:
+        message = FakeMessage()
+
+    class FakeCompletion:
+        choices = [FakeChoice()]
+
+    def fake_completion(**kwargs):
+        captured.update(kwargs)
+        return FakeCompletion()
+
+    monkeypatch.setattr(holo, "MODEL_REQUEST_TOKEN_BUDGET", 2200)
+    monkeypatch.setattr(holo.groq_key_pool, "chat_completion_create", fake_completion)
+    messages = [{"role": "system", "content": "system"}]
+    for _ in range(14):
+        messages.append({"role": "user", "content": "u" * 4000})
+        messages.append({"role": "assistant", "content": "a" * 4000})
+    messages.append({"role": "user", "content": "kurze neue frage"})
+
+    assert holo.call_llm(messages, max_tokens=1600) == "ok"
+    assert len(captured["messages"]) < len(messages)
+    assert holo.estimate_messages_tokens(captured["messages"]) + captured["max_completion_tokens"] <= holo.MODEL_REQUEST_TOKEN_BUDGET
+    assert captured["messages"][-1]["content"] == "kurze neue frage"
+
+
+def test_groq_tpm_413_is_treated_as_rate_limit():
+    class FakeProviderError(Exception):
+        status_code = 413
+
+    exc = FakeProviderError(
+        "Request too large for model on tokens per minute (TPM): "
+        "Limit 8000, Requested 8871, code rate_limit_exceeded"
+    )
+    assert holo.is_rate_limit_error(exc)

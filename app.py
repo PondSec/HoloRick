@@ -66,6 +66,11 @@ MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "25"))
 MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
 MAX_REQUEST_BYTES = MAX_UPLOAD_BYTES * max(1, MAX_FILES_PER_MESSAGE) + 1024 * 1024
 VISION_BASE64_MAX_BYTES = int(float(os.environ.get("VISION_BASE64_MAX_MB", "3")) * 1024 * 1024)
+MODEL_REQUEST_TOKEN_BUDGET = int(os.environ.get("MODEL_REQUEST_TOKEN_BUDGET", "7200"))
+MIN_COMPLETION_TOKENS = int(os.environ.get("MIN_COMPLETION_TOKENS", "512"))
+MAX_SYSTEM_PROMPT_CHARS = int(os.environ.get("MAX_SYSTEM_PROMPT_CHARS", "8000"))
+MAX_HISTORY_MESSAGE_CHARS = int(os.environ.get("MAX_HISTORY_MESSAGE_CHARS", "2400"))
+MAX_FINAL_MESSAGE_CHARS = int(os.environ.get("MAX_FINAL_MESSAGE_CHARS", "18000"))
 VISION_MODEL = os.environ.get("GROQ_VISION_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct").strip()
 MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b").strip()
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
@@ -960,6 +965,106 @@ def messages_include_images(messages) -> bool:
     return False
 
 
+def text_from_content(content) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "\n".join(str(part.get("text") or "") for part in content if part.get("type") == "text")
+    return str(content or "")
+
+
+def estimate_text_tokens(text: str) -> int:
+    return max(1, (len(str(text or "")) + 3) // 4)
+
+
+def estimate_message_tokens(message: dict) -> int:
+    content = message.get("content")
+    tokens = 6 + estimate_text_tokens(message.get("role", ""))
+    if isinstance(content, list):
+        for part in content:
+            if part.get("type") == "image_url":
+                tokens += 1024
+            else:
+                tokens += estimate_text_tokens(part.get("text", ""))
+    else:
+        tokens += estimate_text_tokens(content or "")
+    return tokens
+
+
+def estimate_messages_tokens(messages: list[dict]) -> int:
+    return 4 + sum(estimate_message_tokens(message) for message in messages)
+
+
+def truncate_text(value: str, max_chars: int) -> str:
+    text = str(value or "")
+    if len(text) <= max_chars:
+        return text
+    marker = "\n\n[Kontext automatisch gekuerzt, damit die Antwort stabil erzeugt werden kann.]\n\n"
+    keep = max(200, max_chars - len(marker))
+    head = max(120, int(keep * 0.68))
+    tail = max(80, keep - head)
+    return text[:head].rstrip() + marker + text[-tail:].lstrip()
+
+
+def limit_message_content(content, max_chars: int):
+    if isinstance(content, str):
+        return truncate_text(content, max_chars)
+    if isinstance(content, list):
+        limited = []
+        remaining = max_chars
+        for part in content:
+            if part.get("type") == "text":
+                text = str(part.get("text") or "")
+                clipped = truncate_text(text, max(300, remaining))
+                remaining = max(0, remaining - len(clipped))
+                limited.append({**part, "text": clipped})
+            else:
+                limited.append(part)
+        return limited
+    return content
+
+
+def compact_messages_for_provider(messages: list[dict], max_completion_tokens: int) -> tuple[list[dict], int]:
+    if not messages:
+        return messages, max_completion_tokens
+    budget = max(2048, MODEL_REQUEST_TOKEN_BUDGET)
+    min_completion = min(max_completion_tokens, max(128, MIN_COMPLETION_TOKENS))
+    prepared = []
+    for index, message in enumerate(messages):
+        item = dict(message)
+        if index == 0:
+            item["content"] = limit_message_content(item.get("content", ""), MAX_SYSTEM_PROMPT_CHARS)
+        elif index == len(messages) - 1:
+            item["content"] = limit_message_content(item.get("content", ""), MAX_FINAL_MESSAGE_CHARS)
+        else:
+            item["content"] = limit_message_content(item.get("content", ""), MAX_HISTORY_MESSAGE_CHARS)
+        prepared.append(item)
+
+    while len(prepared) > 2 and estimate_messages_tokens(prepared) + max_completion_tokens > budget:
+        del prepared[1]
+
+    input_tokens = estimate_messages_tokens(prepared)
+    if input_tokens + max_completion_tokens <= budget:
+        return prepared, max_completion_tokens
+
+    available_completion = max(128, budget - input_tokens)
+    adjusted_completion = max(128, min(max_completion_tokens, available_completion))
+    if input_tokens + adjusted_completion <= budget:
+        return prepared, adjusted_completion
+
+    final_budget_tokens = max(400, budget - adjusted_completion - estimate_messages_tokens(prepared[:-1]))
+    final_max_chars = max(1200, final_budget_tokens * 4)
+    prepared[-1]["content"] = limit_message_content(prepared[-1].get("content", ""), final_max_chars)
+    input_tokens = estimate_messages_tokens(prepared)
+    if input_tokens + adjusted_completion <= budget:
+        return prepared, adjusted_completion
+
+    if input_tokens + 128 > budget:
+        raise ValueError("Nachricht oder Anhang ist zu groß. Bitte Inhalt etwas kürzen oder als kleinere Datei senden.")
+    adjusted_completion = max(128, min(min_completion, budget - input_tokens))
+    return prepared, adjusted_completion
+
+
 def public_model_labels() -> dict:
     return {"model": PUBLIC_MODEL_LABEL, "vision_model": PUBLIC_VISION_LABEL, "image_model": PUBLIC_IMAGE_MODEL_LABEL}
 
@@ -1020,9 +1125,30 @@ def retry_after_seconds_from_error(exc) -> int | None:
     return None
 
 
+def provider_error_text(exc) -> str:
+    parts = [str(exc)]
+    response = getattr(exc, "response", None)
+    if response is not None:
+        for attr in ("text", "content"):
+            value = getattr(response, attr, None)
+            if value:
+                if isinstance(value, bytes):
+                    value = value.decode("utf-8", "ignore")
+                parts.append(str(value))
+    return " ".join(parts).lower()
+
+
 def is_rate_limit_error(exc) -> bool:
     status_code = getattr(exc, "status_code", None)
-    return isinstance(exc, RateLimitError) or status_code == 429 or exc.__class__.__name__ == "RateLimitError"
+    text = provider_error_text(exc)
+    return (
+        isinstance(exc, RateLimitError)
+        or status_code == 429
+        or exc.__class__.__name__ == "RateLimitError"
+        or "rate_limit_exceeded" in text
+        or "tokens per minute" in text
+        or " tpm" in text
+    )
 
 
 def rate_limit_response(exc):
@@ -1135,6 +1261,7 @@ def call_llm(messages, temperature=None, max_tokens=None, model=None) -> str:
     temp = bounded_float(temperature if temperature is not None else get_setting("temperature", "0.75"), 0.75, 0, 1.5)
     mt = bounded_int(max_tokens if max_tokens is not None else get_setting("max_tokens", "4096"), 4096, 512, 8192)
     selected_model = model or (VISION_MODEL if messages_include_images(messages) else MODEL)
+    messages, mt = compact_messages_for_provider(messages, mt)
     completion = groq_key_pool.chat_completion_create(
         model=selected_model,
         messages=messages,
