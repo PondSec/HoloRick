@@ -4,6 +4,7 @@ import hmac
 import io
 import json
 import os
+import re
 import secrets
 import sqlite3
 import subprocess
@@ -995,6 +996,12 @@ def estimate_messages_tokens(messages: list[dict]) -> int:
     return 4 + sum(estimate_message_tokens(message) for message in messages)
 
 
+def strip_model_reasoning(text: str) -> str:
+    cleaned = re.sub(r"(?is)<think\b[^>]*>.*?</think>\s*", "", str(text or ""))
+    cleaned = re.sub(r"(?is)^\s*<think\b[^>]*>.*", "", cleaned)
+    return cleaned.strip()
+
+
 def truncate_text(value: str, max_chars: int) -> str:
     text = str(value or "")
     if len(text) <= max_chars:
@@ -1269,7 +1276,7 @@ def call_llm(messages, temperature=None, max_tokens=None, model=None) -> str:
         max_completion_tokens=mt,
         top_p=1,
     )
-    return completion.choices[0].message.content or ""
+    return strip_model_reasoning(completion.choices[0].message.content or "")
 
 
 def wants_image_generation(text: str, has_attachment: bool = False) -> bool:

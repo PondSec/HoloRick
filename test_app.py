@@ -98,3 +98,8 @@ def test_groq_tpm_413_is_treated_as_rate_limit():
         "Limit 8000, Requested 8871, code rate_limit_exceeded"
     )
     assert holo.is_rate_limit_error(exc)
+
+
+def test_model_reasoning_blocks_are_removed():
+    text = "<think>interner kram</think>\n\nSichtbare Antwort."
+    assert holo.strip_model_reasoning(text) == "Sichtbare Antwort."
