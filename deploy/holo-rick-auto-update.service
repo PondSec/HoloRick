@@ -1,0 +1,13 @@
+[Unit]
+Description=Holo Rick auto update with healthcheck rollback
+Wants=docker.service
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/usr/share/nginx/html/chat.pondsec.com
+EnvironmentFile=-/usr/share/nginx/html/chat.pondsec.com/.env
+ExecStart=/usr/share/nginx/html/chat.pondsec.com/scripts/auto_update.sh
+Nice=5
+IOSchedulingClass=best-effort
+IOSchedulingPriority=6
