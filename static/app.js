@@ -1046,9 +1046,9 @@ function bindEvents() {
   });
   $('#newChatBtn').onclick = newChat;
   $('#projectsBtn').onclick = () => showProjects().catch(e => showError(e, 'Projekte nicht verfügbar'));
-  $('#closeProjectBtn').onclick = () => $('#projectModal').classList.add('hidden');
-  $('#saveProjectBtn').onclick = () => saveProject().catch(e => showError(e, 'Projekt konnte nicht gespeichert werden'));
-  $('#projectBriefBtn').onclick = () => refreshProjectMemory().catch(e => showError(e, 'Erinnerung fehlgeschlagen'));
+  $('#closeProjectBtn')?.addEventListener('click', () => $('#projectModal')?.classList.add('hidden'));
+  $('#saveProjectBtn')?.addEventListener('click', () => saveProject().catch(e => showError(e, 'Projekt konnte nicht gespeichert werden')));
+  $('#projectBriefBtn')?.addEventListener('click', () => refreshProjectMemory().catch(e => showError(e, 'Erinnerung fehlgeschlagen')));
   $('#activeModeLabel').onclick = e => {
     e.stopPropagation();
     toggleModePopover();
