@@ -29,6 +29,64 @@ def clean_public_usage():
         con.commit()
 
 
+
+def auth_headers(client):
+    data = client.get("/api/me").get_json()
+    return {"X-CSRF-Token": data["csrf_token"]}
+
+
+def test_project_chat_send_uses_project_context(monkeypatch):
+    captured = {}
+
+    def fake_llm(messages, **kwargs):
+        if "Projekt: Testprojekt" in messages[0]["content"]:
+            captured["messages"] = messages
+            return "Projektantwort"
+        return "Projekttitel"
+
+    monkeypatch.setattr(holo, "call_llm", fake_llm)
+    client = holo.app.test_client()
+    headers = auth_headers(client)
+    email = "project-test@example.com"
+    with holo.db() as con:
+        con.execute("DELETE FROM users WHERE email=?", (email,))
+        con.commit()
+
+    register = client.post(
+        "/api/register",
+        json={
+            "display_name": "Project Tester",
+            "email": email,
+            "password": "super-sicheres-passwort-123",
+            "privacy_accepted": True,
+            "terms_accepted": True,
+        },
+        headers=headers,
+    )
+    assert register.status_code == 200
+    headers = auth_headers(client)
+
+    project = client.post("/api/projects", json={"name": "Testprojekt", "description": "Shared Ziel"}, headers=headers)
+    assert project.status_code == 200
+    project_id = project.get_json()["id"]
+    assert client.put(
+        f"/api/projects/{project_id}",
+        json={"name": "Testprojekt", "description": "Shared Ziel", "shared_context": "Immer duzen."},
+        headers=headers,
+    ).status_code == 200
+
+    response = client.post("/api/send", data={"message": "Hallo", "chat_id": "0", "project_id": str(project_id)}, headers=headers)
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["assistant_message"]["content"] == "Projektantwort"
+
+    system_prompt = captured["messages"][0]["content"]
+    assert "Projekt: Testprojekt" in system_prompt
+    assert "Beschreibung: Shared Ziel" in system_prompt
+    assert "Manueller Projektkontext" in system_prompt
+    assert "Immer duzen." in system_prompt
+
+
 def test_guest_identity_survives_ip_change_and_allows_family_independence(monkeypatch):
     monkeypatch.setattr(holo, "call_llm", lambda messages, **kwargs: "ok")
     holo.set_setting("public_message_limit", "1")

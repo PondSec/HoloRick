@@ -71,6 +71,8 @@ MODEL_REQUEST_TOKEN_BUDGET = int(os.environ.get("MODEL_REQUEST_TOKEN_BUDGET", "7
 MIN_COMPLETION_TOKENS = int(os.environ.get("MIN_COMPLETION_TOKENS", "512"))
 MAX_SYSTEM_PROMPT_CHARS = int(os.environ.get("MAX_SYSTEM_PROMPT_CHARS", "8000"))
 MAX_HISTORY_MESSAGE_CHARS = int(os.environ.get("MAX_HISTORY_MESSAGE_CHARS", "2400"))
+MAX_PROJECT_CONTEXT_CHARS = int(os.environ.get("MAX_PROJECT_CONTEXT_CHARS", "5000"))
+MAX_CONTEXT_MEMORY_CHARS = int(os.environ.get("MAX_CONTEXT_MEMORY_CHARS", "2800"))
 MAX_FINAL_MESSAGE_CHARS = int(os.environ.get("MAX_FINAL_MESSAGE_CHARS", "18000"))
 VISION_MODEL = os.environ.get("GROQ_VISION_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct").strip()
 MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b").strip()
@@ -299,16 +301,30 @@ def init_db():
                 updated_at TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS projects(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                shared_context TEXT NOT NULL DEFAULT '',
+                memory_summary TEXT NOT NULL DEFAULT '',
+                context_updated_at TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
             CREATE TABLE IF NOT EXISTS chats(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
+                project_id INTEGER,
                 title TEXT NOT NULL DEFAULT 'Neuer Chat',
                 project_context TEXT NOT NULL DEFAULT '',
                 context_updated_at TEXT,
                 archived INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
-                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE SET NULL
             );
             CREATE TABLE IF NOT EXISTS messages(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -354,6 +370,11 @@ def init_db():
         )
         for table, column, definition in [
             ("chats", "user_id", "INTEGER"),
+            ("chats", "project_id", "INTEGER"),
+            ("projects", "description", "TEXT NOT NULL DEFAULT ''"),
+            ("projects", "shared_context", "TEXT NOT NULL DEFAULT ''"),
+            ("projects", "memory_summary", "TEXT NOT NULL DEFAULT ''"),
+            ("projects", "context_updated_at", "TEXT"),
             ("chats", "project_context", "TEXT NOT NULL DEFAULT ''"),
             ("chats", "context_updated_at", "TEXT"),
             ("messages", "user_id", "INTEGER"),
@@ -814,12 +835,12 @@ def render_markdown(text: str) -> str:
     return bleach.linkify(clean, callbacks=[bleach.callbacks.nofollow, bleach.callbacks.target_blank])
 
 
-def create_chat(user_id: int, title="Neuer Chat") -> int:
+def create_chat(user_id: int, title="Neuer Chat", project_id: int | None = None) -> int:
     ts = now_iso()
     with db() as con:
         cur = con.execute(
-            "INSERT INTO chats(user_id,title,created_at,updated_at) VALUES(?,?,?,?)",
-            (user_id, title, ts, ts),
+            "INSERT INTO chats(user_id,project_id,title,created_at,updated_at) VALUES(?,?,?,?,?)",
+            (user_id, project_id, title, ts, ts),
         )
         con.commit()
         return int(cur.lastrowid)
@@ -829,7 +850,7 @@ def get_chat_for_user(chat_id: int, user_id: int):
     with db() as con:
         return con.execute(
             """
-            SELECT id,user_id,title,project_context,context_updated_at,archived,created_at,updated_at
+            SELECT id,user_id,project_id,title,project_context,context_updated_at,archived,created_at,updated_at
             FROM chats
             WHERE id=? AND user_id=?
             """,
@@ -838,7 +859,7 @@ def get_chat_for_user(chat_id: int, user_id: int):
 
 
 def normalize_project_context(value: str) -> str:
-    return str(value or "").strip()[:6000]
+    return str(value or "").strip()[:MAX_PROJECT_CONTEXT_CHARS]
 
 
 def update_chat_context(chat_id: int, user_id: int, context: str) -> bool:
@@ -852,6 +873,43 @@ def update_chat_context(chat_id: int, user_id: int, context: str) -> bool:
         con.commit()
     return cur.rowcount > 0
 
+
+
+def normalize_context_memory(value: str) -> str:
+    return str(value or "").strip()[:MAX_CONTEXT_MEMORY_CHARS]
+
+def get_project_for_user(project_id: int, user_id: int):
+    with db() as con:
+        return con.execute(
+            "SELECT id,user_id,name,description,shared_context,memory_summary,context_updated_at,created_at,updated_at FROM projects WHERE id=? AND user_id=?",
+            (project_id, user_id),
+        ).fetchone()
+
+def create_project(user_id: int, name: str, description: str = "") -> int:
+    ts = now_iso()
+    name = (name or "Neues Projekt").strip()[:80] or "Neues Projekt"
+    with db() as con:
+        cur = con.execute(
+            "INSERT INTO projects(user_id,name,description,created_at,updated_at) VALUES(?,?,?,?,?)",
+            (user_id, name, (description or '').strip()[:600], ts, ts),
+        )
+        con.commit()
+        return int(cur.lastrowid)
+
+def project_context_bundle(project_id: int | None, user_id: int) -> str:
+    if not project_id:
+        return ""
+    project = get_project_for_user(int(project_id), user_id)
+    if not project:
+        return ""
+    parts = [f"Projekt: {project['name']}"]
+    if project['description']:
+        parts.append("Beschreibung: " + project['description'])
+    if project['shared_context']:
+        parts.append("Manueller Projektkontext:\n" + project['shared_context'])
+    if project['memory_summary']:
+        parts.append("Verdichtete Projekt-Erinnerung aus bisherigen Chats:\n" + project['memory_summary'])
+    return "\n\n".join(parts)
 
 def add_message(chat_id: int, user_id: int, role: str, content: str, meta: dict | None = None) -> int:
     ts = now_iso()
@@ -936,7 +994,7 @@ def build_messages(
     if project_context:
         system_extra += (
             "\nProjektkontext dieses Chats, vom Nutzer bewusst hinterlegt. Nutze ihn als dauerhafte Arbeitsgrundlage, "
-            "aber behandle ihn als privat und nur fuer diesen Chat gueltig:\n"
+            "behandle ihn als privat. Projektteile gelten fuer alle Chats desselben Projekts, Chatteile nur fuer diesen Chat:\n"
             + project_context
         )
     messages = [{"role": "system", "content": system_prompt + system_extra}]
@@ -1927,6 +1985,79 @@ def delete_account():
     return jsonify({"ok": True})
 
 
+
+@app.route("/api/projects", methods=["GET", "POST"])
+def projects():
+    user = current_user()
+    if not user:
+        return jsonify({"error": "Login erforderlich"}), 401
+    user_id = int(user["id"])
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        project_id = create_project(user_id, data.get("name") or "Neues Projekt", data.get("description") or "")
+        return jsonify({"id": project_id})
+    q = (request.args.get("q") or "").strip().lower()
+    with db() as con:
+        rows = con.execute("SELECT id,name,description,shared_context,memory_summary,context_updated_at,created_at,updated_at FROM projects WHERE user_id=? ORDER BY updated_at DESC", (user_id,)).fetchall()
+    items = [dict(r) for r in rows]
+    if q:
+        items = [p for p in items if q in p["name"].lower() or q in (p.get("description") or "").lower()]
+    return jsonify(items)
+
+@app.route("/api/projects/<int:project_id>", methods=["GET", "PUT", "DELETE"])
+def project_detail(project_id):
+    user = current_user()
+    if not user:
+        return jsonify({"error": "Login erforderlich"}), 401
+    user_id = int(user["id"])
+    project = get_project_for_user(project_id, user_id)
+    if not project:
+        return jsonify({"error": "Projekt nicht gefunden"}), 404
+    if request.method == "GET":
+        with db() as con:
+            chats = con.execute("SELECT id,title,created_at,updated_at FROM chats WHERE user_id=? AND project_id=? AND archived=0 ORDER BY updated_at DESC", (user_id, project_id)).fetchall()
+        return jsonify({"project": dict(project), "chats": [dict(c) for c in chats]})
+    if request.method == "DELETE":
+        with db() as con:
+            con.execute("UPDATE chats SET project_id=NULL WHERE user_id=? AND project_id=?", (user_id, project_id))
+            con.execute("DELETE FROM projects WHERE id=? AND user_id=?", (project_id, user_id))
+            con.commit()
+        return jsonify({"ok": True})
+    data = request.get_json(silent=True) or {}
+    ts = now_iso()
+    with db() as con:
+        con.execute("UPDATE projects SET name=?,description=?,shared_context=?,context_updated_at=?,updated_at=? WHERE id=? AND user_id=?", ((data.get('name') or project['name']).strip()[:80], (data.get('description') or '').strip()[:600], normalize_project_context(data.get('shared_context') or ''), ts, ts, project_id, user_id))
+        con.commit()
+    return jsonify({"ok": True})
+
+@app.route("/api/projects/<int:project_id>/memory/brief", methods=["POST"])
+def project_memory_brief(project_id):
+    user = current_user()
+    if not user:
+        return jsonify({"error": "Login erforderlich"}), 401
+    user_id = int(user["id"])
+    project = get_project_for_user(project_id, user_id)
+    if not project:
+        return jsonify({"error": "Projekt nicht gefunden"}), 404
+    with db() as con:
+        rows = con.execute("""SELECT c.title,m.role,m.content FROM messages m JOIN chats c ON c.id=m.chat_id WHERE c.user_id=? AND c.project_id=? AND m.role IN ('user','assistant') ORDER BY m.id DESC LIMIT 28""", (user_id, project_id)).fetchall()
+    if not rows:
+        return jsonify({"error": "Noch zu wenig Projektinhalt"}), 400
+    transcript = "\n\n".join(f"{r['title']} / {r['role']}: {r['content']}" for r in reversed(rows))[:16000]
+    prompt = "Verdichte alle Projekt-Chats zu einer sehr kompakten, tokenarmen Projekterinnerung. Nur stabile Fakten, Entscheidungen, Ziele, Präferenzen, offene Punkte. Maximal 18 Bulletpoints.\n\nBisherige Erinnerung:\n{}\n\nAuszug:\n{}".format(project['memory_summary'] or '-', transcript)
+    try:
+        memory = normalize_context_memory(call_llm(build_messages([], prompt, ai_mode='precise', response_format='steps', project_context=project_context_bundle(project_id, user_id)), temperature=0.2, max_tokens=900))
+        ts = now_iso()
+        with db() as con:
+            con.execute("UPDATE projects SET memory_summary=?,context_updated_at=?,updated_at=? WHERE id=? AND user_id=?", (memory, ts, ts, project_id, user_id))
+            con.commit()
+        return jsonify({"memory_summary": memory, "context_updated_at": ts})
+    except Exception as exc:
+        if is_rate_limit_error(exc):
+            return rate_limit_response(exc)
+        app.logger.exception("project memory brief failed")
+        return jsonify({"error": "Projekt-Erinnerung konnte nicht erzeugt werden."}), 502
+
 @app.route("/api/chats", methods=["GET", "POST"])
 def chats():
     user = current_user()
@@ -1936,13 +2067,17 @@ def chats():
         if public_limit_reached():
             return jsonify({"error": "PUBLIC_LIMIT"}), 429
     if request.method == "POST":
-        chat_id = create_chat(int(user["id"]), "Neuer Chat") if user else 0
+        data = request.get_json(silent=True) or {}
+        project_id = data.get("project_id")
+        if user and project_id and not get_project_for_user(int(project_id), int(user["id"])):
+            return jsonify({"error": "Projekt nicht gefunden"}), 404
+        chat_id = create_chat(int(user["id"]), "Neuer Chat", int(project_id) if user and project_id else None) if user else 0
         return jsonify({"id": chat_id})
     archived = 1 if request.args.get("archived") == "1" else 0
     with db() as con:
         rows = con.execute(
             """
-            SELECT id,title,archived,created_at,updated_at
+            SELECT id,project_id,title,archived,created_at,updated_at
             FROM chats
             WHERE user_id=? AND archived=?
             ORDER BY updated_at DESC
@@ -2197,7 +2332,11 @@ def send():
             if not chat:
                 return jsonify({"error": "Chat nicht gefunden"}), 404
         else:
-            chat_id = create_chat(user_id, "Neuer Chat")
+            raw_project_id = data.get("project_id")
+            project_id = int(raw_project_id) if raw_project_id else None
+            if project_id and not get_project_for_user(project_id, user_id):
+                return jsonify({"error": "Projekt nicht gefunden"}), 404
+            chat_id = create_chat(user_id, "Neuer Chat", project_id)
             chat = get_chat_for_user(chat_id, user_id)
         history = fetch_messages(chat_id, user_id)
 
@@ -2207,7 +2346,9 @@ def send():
         for file in files:
             upload_infos.append(save_upload(file, user_id=user_id, chat_id=chat_id if chat_id else None, message_id=None))
         attachment_text, image_payloads = prepare_attachment_context(upload_infos)
-        project_context = chat["project_context"] if user_id and chat else ""
+        project_context = ""
+        if user_id and chat:
+            project_context = "\n\n".join(x for x in [project_context_bundle(chat["project_id"], user_id), chat["project_context"] or ""] if x)
         image_generation = None
         assistant_meta = {}
         if wants_image_generation(text, has_attachment=has_attachment):
