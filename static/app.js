@@ -30,7 +30,7 @@ let currentChatHasContext = false;
 const guestTokenKey = 'holo_rick_guest_token';
 
 const modeLabels = {
-  holo: 'ChatGPT',
+  holo: 'Holo Rick',
   precise: 'Präzise',
   deep: 'Deep Work',
   code: 'Code'
@@ -778,7 +778,7 @@ function setActiveNav(id) {
 function updateModeUi() {
   document.querySelectorAll('.mode-option').forEach(btn => btn.classList.toggle('active', btn.dataset.mode === aiMode));
   document.querySelectorAll('.format-option').forEach(btn => btn.classList.toggle('active', btn.dataset.format === responseFormat));
-  $('#activeModeLabel').innerHTML = `<span>${esc(modeLabels[aiMode] || 'ChatGPT')}</span><small>${esc(formatLabels[responseFormat] || 'Auto')}</small><i data-icon="chevron-down"></i>`;
+  $('#activeModeLabel').innerHTML = `<span>${esc(modeLabels[aiMode] || 'Holo Rick')}</span><small>${esc(formatLabels[responseFormat] || 'Auto')}</small><i data-icon="chevron-down"></i>`;
   injectIcons($('#activeModeLabel'));
 }
 

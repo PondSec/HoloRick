@@ -1266,7 +1266,7 @@ button { color: inherit; }
   .mode-popover { width: calc(100vw - 24px); }
 }
 
-/* Project workspace: flat, dark, focused ChatGPT-like UX */
+/* Project workspace: flat, dark, focused Holo-Rick-like UX */
 .projects-view {
   flex: 1;
   min-height: 0;
