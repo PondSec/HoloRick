@@ -161,3 +161,72 @@ def test_groq_tpm_413_is_treated_as_rate_limit():
 def test_model_reasoning_blocks_are_removed():
     text = "<think>interner kram</think>\n\nSichtbare Antwort."
     assert holo.strip_model_reasoning(text) == "Sichtbare Antwort."
+
+
+def register_user(client, email):
+    headers = auth_headers(client)
+    with holo.db() as con:
+        con.execute("DELETE FROM users WHERE email=?", (email,))
+        con.commit()
+    response = client.post(
+        "/api/register",
+        json={
+            "display_name": "Share Tester",
+            "email": email,
+            "password": "super-sicheres-passwort-123",
+            "privacy_accepted": True,
+            "terms_accepted": True,
+        },
+        headers=headers,
+    )
+    assert response.status_code == 200
+    return auth_headers(client)
+
+
+def test_shared_chat_link_allows_guest_to_read_and_write(monkeypatch):
+    monkeypatch.setattr(holo, "call_llm", lambda messages, **kwargs: "shared ok")
+    owner = holo.app.test_client()
+    owner_headers = register_user(owner, "share-owner@example.com")
+    sent = owner.post("/api/send", data={"message": "Start", "chat_id": "0"}, headers=owner_headers)
+    assert sent.status_code == 200
+    chat_id = sent.get_json()["chat_id"]
+
+    shared = owner.post(f"/api/chats/{chat_id}/share", headers=owner_headers)
+    assert shared.status_code == 200
+    token = shared.get_json()["token"]
+    assert len(token) >= 32
+
+    guest = holo.app.test_client()
+    guest_headers_data = guest_headers(guest, **{"User-Agent": "ShareGuest"})
+    detail = guest.get(f"/api/shared/{token}", headers=guest_headers_data)
+    assert detail.status_code == 200
+    assert [m["content"] for m in detail.get_json()["messages"] if m["role"] == "user"] == ["Start"]
+
+    reply = guest.post("/api/send", data={"message": "Gast schreibt", "share_token": token}, headers=guest_headers_data)
+    assert reply.status_code == 200
+    after = owner.get(f"/api/chats/{chat_id}", headers=owner_headers)
+    assert "Gast schreibt" in [m["content"] for m in after.get_json()["messages"]]
+
+
+def test_project_delete_removes_project_chats(monkeypatch):
+    monkeypatch.setattr(holo, "call_llm", lambda messages, **kwargs: "ok")
+    client = holo.app.test_client()
+    headers = register_user(client, "project-delete@example.com")
+    project = client.post("/api/projects", json={"name": "Weg", "description": ""}, headers=headers)
+    project_id = project.get_json()["id"]
+    sent = client.post("/api/send", data={"message": "Hallo", "chat_id": "0", "project_id": str(project_id)}, headers=headers)
+    chat_id = sent.get_json()["chat_id"]
+
+    deleted = client.delete(f"/api/projects/{project_id}", headers=headers)
+    assert deleted.status_code == 200
+    assert client.get(f"/api/projects/{project_id}", headers=headers).status_code == 404
+    assert client.get(f"/api/chats/{chat_id}", headers=headers).status_code == 404
+
+
+def test_markdown_does_not_autolink_filenames_but_keeps_urls():
+    filename_html = holo.render_markdown("server.py")
+    url_html = holo.render_markdown("https://example.com")
+    assert "<a" not in filename_html
+    assert "server.py" in filename_html
+    assert "<a" in url_html
+    assert "text-decoration" not in url_html
