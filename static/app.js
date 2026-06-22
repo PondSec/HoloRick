@@ -30,7 +30,7 @@ let currentChatHasContext = false;
 const guestTokenKey = 'holo_rick_guest_token';
 
 const modeLabels = {
-  holo: 'Holo Rick',
+  holo: 'ChatGPT',
   precise: 'Präzise',
   deep: 'Deep Work',
   code: 'Code'
@@ -66,6 +66,12 @@ const icons = {
   'edit-3': '<svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
   'search': '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>',
   'message-circle': '<svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 17 0Z"/></svg>',
+  'circle': '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></svg>',
+  'book': '<svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5Z"/></svg>',
+  'briefcase': '<svg viewBox="0 0 24 24"><path d="M10 6V5a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v1"/><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M3 12h18"/></svg>',
+  'layout-grid': '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>',
+  'wand': '<svg viewBox="0 0 24 24"><path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9H6"/><path d="M20 9h-2"/><path d="m17.8 6.2 1.4-1.4"/><path d="m10.8 13.2-1.4 1.4"/><path d="m9.4 3.8 1.4 1.4"/><path d="m14 10 7 7-4 4-7-7Z"/></svg>',
+  'chevron-down': '<svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>',
   'archive': '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg>',
   'settings': '<svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1A2 2 0 1 1 4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1A2 2 0 1 1 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3h.1a1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.6h.1a1.7 1.7 0 0 0 1.9-.3l.1-.1A2 2 0 1 1 19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.6 1h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.6 1Z"/></svg>',
   'sparkles': '<svg viewBox="0 0 24 24"><path d="m12 3 1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8Z"/><path d="m19 14 .9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9Z"/><path d="m5 14 .9 2.1L8 17l-2.1.9L5 20l-.9-2.1L2 17l2.1-.9Z"/></svg>',
@@ -272,8 +278,8 @@ function renderEmpty() {
   messagesEl.innerHTML = `
     <div class="empty">
       <div class="orb">H</div>
-      <h1>Womit verschwenden wir heute Rechenzeit?</h1>
-      <p>Frag etwas. Ich antworte hilfreich, trotz allem.</p>
+      <h1>Wobei kann ich helfen?</h1>
+      <p>Ein ruhiger Workspace für präzise Antworten, Projektkontext und Dateien.</p>
       <div class="prompt-grid">${chips}</div>
     </div>`;
   messagesEl.querySelectorAll('.prompt-chip').forEach(btn => {
@@ -429,9 +435,7 @@ function renderProjectsView() {
 async function showProjects() {
   if (!me.authenticated) { setAuthMode('login'); $('#loginModal').classList.remove('hidden'); return; }
   await loadProjects();
-  $('#homeBtn').classList.remove('active');
-  $('#archiveBtn').classList.remove('active');
-  $('#projectsBtn').classList.add('active');
+  setActiveNav('projectsBtn');
   renderProjectsView();
 }
 
@@ -440,9 +444,7 @@ async function openProject(id) {
   currentProjectId = id;
   currentProject = d.project;
   showChatSurface();
-  $('#homeBtn').classList.remove('active');
-  $('#archiveBtn').classList.remove('active');
-  $('#projectsBtn').classList.add('active');
+  setActiveNav('projectsBtn');
   messagesEl.innerHTML = `<div class="project-home"><div class="project-title">${icons.folder}<h1>${esc(d.project.name)}</h1><button class="ghost" id="editProjectBtn" type="button">Kontext</button></div><div class="composer-preview" id="projectNewChat">+ Neuer Chat in ${esc(d.project.name)}</div><div class="project-tabs"><button class="active">Chats</button><button>Quellen</button></div><div class="project-chat-list">${d.chats.map(c => `<button class="project-chat-row" data-id="${c.id}"><span><strong>${esc(c.title)}</strong><small>Projektchat</small></span><em>${new Date(c.updated_at).toLocaleDateString('de-DE')}</em></button>`).join('') || '<div class="empty-list">Noch keine Chats im Projekt.</div>'}</div></div>`;
   $('#editProjectBtn').onclick = () => openProjectModal(d.project);
   $('#projectNewChat').onclick = newChat;
@@ -767,10 +769,17 @@ async function runSmartAction(action, sourceMessageId, sourceContent) {
   }
 }
 
+function setActiveNav(id) {
+  ['homeBtn', 'searchBtn', 'libraryBtn', 'projectsBtn', 'appsBtn', 'archiveBtn'].forEach(navId => {
+    document.getElementById(navId)?.classList.toggle('active', navId === id);
+  });
+}
+
 function updateModeUi() {
   document.querySelectorAll('.mode-option').forEach(btn => btn.classList.toggle('active', btn.dataset.mode === aiMode));
   document.querySelectorAll('.format-option').forEach(btn => btn.classList.toggle('active', btn.dataset.format === responseFormat));
-  $('#activeModeLabel').innerHTML = `<span>${esc(modeLabels[aiMode] || 'Holo Rick')}</span><small>${esc(formatLabels[responseFormat] || 'Auto')}</small>`;
+  $('#activeModeLabel').innerHTML = `<span>${esc(modeLabels[aiMode] || 'ChatGPT')}</span><small>${esc(formatLabels[responseFormat] || 'Auto')}</small><i data-icon="chevron-down"></i>`;
+  injectIcons($('#activeModeLabel'));
 }
 
 function toggleModePopover(force) {
@@ -1046,6 +1055,9 @@ function bindEvents() {
   });
   $('#newChatBtn').onclick = newChat;
   $('#projectsBtn').onclick = () => showProjects().catch(e => showError(e, 'Projekte nicht verfügbar'));
+  $('#searchBtn').onclick = () => { setActiveNav('searchBtn'); $('#chatSearch').focus(); };
+  $('#libraryBtn').onclick = () => { setActiveNav('libraryBtn'); archivedView = false; showChatSurface(); loadChats(); };
+  $('#appsBtn').onclick = () => { setActiveNav('appsBtn'); $('#settingsModal').classList.remove('hidden'); };
   $('#closeProjectBtn')?.addEventListener('click', () => $('#projectModal')?.classList.add('hidden'));
   $('#saveProjectBtn')?.addEventListener('click', () => saveProject().catch(e => showError(e, 'Projekt konnte nicht gespeichert werden')));
   $('#projectBriefBtn')?.addEventListener('click', () => refreshProjectMemory().catch(e => showError(e, 'Erinnerung fehlgeschlagen')));
@@ -1079,9 +1091,7 @@ function bindEvents() {
     showChatSurface();
     currentProjectId = 0;
     archivedView = false;
-    $('#homeBtn').classList.add('active');
-    $('#projectsBtn').classList.remove('active');
-    $('#archiveBtn').classList.remove('active');
+    setActiveNav('homeBtn');
     $('#sectionTitle').textContent = 'Aktuelle';
     loadChats();
   };
@@ -1089,9 +1099,7 @@ function bindEvents() {
     showChatSurface();
     currentProjectId = 0;
     archivedView = true;
-    $('#archiveBtn').classList.add('active');
-    $('#homeBtn').classList.remove('active');
-    $('#projectsBtn').classList.remove('active');
+    setActiveNav('archiveBtn');
     $('#sectionTitle').textContent = 'Archiv';
     loadChats();
   };
