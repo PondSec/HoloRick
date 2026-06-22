@@ -157,6 +157,14 @@ MARKDOWN_ATTRIBUTES = {
     "th": ["align"],
 }
 
+FILENAME_AUTOLINK_RE = re.compile(r"^[\w .-]+\.(?:py|js|ts|tsx|jsx|html|css|json|ya?ml|toml|md|txt|log|csv|env|ini|cfg|conf|sh|bash|zsh|sql|sqlite|db|pdf|png|jpe?g|gif|webp|svg)$", re.IGNORECASE)
+
+
+def skip_filename_autolinks(attrs, new=False):
+    if new and FILENAME_AUTOLINK_RE.match(str(attrs.get("_text") or "").strip()):
+        return None
+    return attrs
+
 AI_MODE_INSTRUCTIONS = {
     "holo": "Arbeitsmodus Holo: direkt, hilfreich, mit trockenem Humor, aber ohne unnötige Länge.",
     "precise": "Arbeitsmodus Präzise: kurz, sachlich, entscheidungsstark. Nenne Annahmen und gib konkrete nächste Schritte.",
@@ -365,6 +373,14 @@ def init_db():
                 first_seen INTEGER NOT NULL,
                 last_seen INTEGER NOT NULL,
                 blocked_until INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS chat_shares(
+                token TEXT PRIMARY KEY,
+                chat_id INTEGER NOT NULL,
+                created_by INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(chat_id) REFERENCES chats(id) ON DELETE CASCADE,
+                FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE CASCADE
             );
             """
         )
@@ -820,6 +836,7 @@ def increment_public_usage(has_attachment: bool = False):
 
 
 def render_markdown(text: str) -> str:
+    linkify = bleach.linkifier.Linker(callbacks=[skip_filename_autolinks, bleach.callbacks.nofollow, bleach.callbacks.target_blank], skip_tags=["code", "pre"], parse_email=False)
     html = markdown.markdown(
         text or "",
         extensions=["extra", "sane_lists"],
@@ -832,7 +849,7 @@ def render_markdown(text: str) -> str:
         protocols=["http", "https", "mailto"],
         strip=True,
     )
-    return bleach.linkify(clean, callbacks=[bleach.callbacks.nofollow, bleach.callbacks.target_blank])
+    return linkify.linkify(clean)
 
 
 def create_chat(user_id: int, title="Neuer Chat", project_id: int | None = None) -> int:
@@ -856,6 +873,36 @@ def get_chat_for_user(chat_id: int, user_id: int):
             """,
             (chat_id, user_id),
         ).fetchone()
+
+
+def get_shared_chat(token: str):
+    token = str(token or "").strip()
+    if not token:
+        return None
+    with db() as con:
+        return con.execute(
+            """
+            SELECT s.token,s.chat_id,s.created_by,c.user_id,c.project_id,c.title,c.project_context,c.context_updated_at,c.archived,c.created_at,c.updated_at
+            FROM chat_shares s
+            JOIN chats c ON c.id=s.chat_id
+            WHERE s.token=?
+            """,
+            (token,),
+        ).fetchone()
+
+
+def fetch_messages_for_chat(chat_id: int):
+    with db() as con:
+        rows = con.execute(
+            """
+            SELECT id,role,content,meta,created_at
+            FROM messages
+            WHERE chat_id=?
+            ORDER BY id ASC
+            """,
+            (chat_id,),
+        ).fetchall()
+    return [message_payload(r) for r in rows]
 
 
 def normalize_project_context(value: str) -> str:
@@ -911,14 +958,14 @@ def project_context_bundle(project_id: int | None, user_id: int) -> str:
         parts.append("Verdichtete Projekt-Erinnerung aus bisherigen Chats:\n" + project['memory_summary'])
     return "\n\n".join(parts)
 
-def add_message(chat_id: int, user_id: int, role: str, content: str, meta: dict | None = None) -> int:
+def add_message(chat_id: int, user_id: int | None, role: str, content: str, meta: dict | None = None) -> int:
     ts = now_iso()
     with db() as con:
         cur = con.execute(
             "INSERT INTO messages(chat_id,user_id,role,content,meta,created_at) VALUES(?,?,?,?,?,?)",
             (chat_id, user_id, role, content, json.dumps(meta or {}, ensure_ascii=False), ts),
         )
-        con.execute("UPDATE chats SET updated_at=? WHERE id=? AND user_id=?", (ts, chat_id, user_id))
+        con.execute("UPDATE chats SET updated_at=? WHERE id=?", (ts, chat_id))
         con.commit()
         return int(cur.lastrowid)
 
@@ -2019,9 +2066,15 @@ def project_detail(project_id):
         return jsonify({"project": dict(project), "chats": [dict(c) for c in chats]})
     if request.method == "DELETE":
         with db() as con:
-            con.execute("UPDATE chats SET project_id=NULL WHERE user_id=? AND project_id=?", (user_id, project_id))
+            rows = con.execute("SELECT stored_name FROM uploads WHERE user_id=? AND chat_id IN (SELECT id FROM chats WHERE user_id=? AND project_id=?)", (user_id, user_id, project_id)).fetchall()
+            con.execute("DELETE FROM chats WHERE user_id=? AND project_id=?", (user_id, project_id))
             con.execute("DELETE FROM projects WHERE id=? AND user_id=?", (project_id, user_id))
             con.commit()
+        for row in rows:
+            try:
+                (UPLOAD_DIR / row["stored_name"]).unlink(missing_ok=True)
+            except Exception:
+                pass
         return jsonify({"ok": True})
     data = request.get_json(silent=True) or {}
     ts = now_iso()
@@ -2057,6 +2110,35 @@ def project_memory_brief(project_id):
             return rate_limit_response(exc)
         app.logger.exception("project memory brief failed")
         return jsonify({"error": "Projekt-Erinnerung konnte nicht erzeugt werden."}), 502
+
+@app.route("/share/<token>")
+def shared_page(token):
+    return render_template("index.html", asset_version=ASSET_VERSION)
+
+
+@app.route("/api/chats/<int:chat_id>/share", methods=["POST"])
+def share_chat(chat_id):
+    user = current_user()
+    if not user:
+        return jsonify({"error": "Login erforderlich"}), 401
+    if not get_chat_for_user(chat_id, int(user["id"])):
+        return jsonify({"error": "Chat nicht gefunden"}), 404
+    with db() as con:
+        row = con.execute("SELECT token FROM chat_shares WHERE chat_id=? AND created_by=?", (chat_id, user["id"])).fetchone()
+        token = row["token"] if row else secrets.token_urlsafe(32)
+        if not row:
+            con.execute("INSERT INTO chat_shares(token,chat_id,created_by,created_at) VALUES(?,?,?,?)", (token, chat_id, user["id"], now_iso()))
+            con.commit()
+    return jsonify({"token": token, "url": request.host_url.rstrip("/") + "/share/" + token})
+
+
+@app.route("/api/shared/<token>")
+def shared_chat_detail(token):
+    shared = get_shared_chat(token)
+    if not shared:
+        return jsonify({"error": "Freigabe nicht gefunden"}), 404
+    return jsonify({"chat": dict(shared), "messages": fetch_messages_for_chat(int(shared["chat_id"]))})
+
 
 @app.route("/api/chats", methods=["GET", "POST"])
 def chats():
@@ -2321,12 +2403,25 @@ def send():
     if not text and not has_attachment:
         return jsonify({"error": "Nachricht ist leer"}), 400
 
-    if not user:
+    share_token = str(data.get("share_token") or "").strip()
+    shared = get_shared_chat(share_token) if share_token else None
+    if share_token and not shared:
+        return jsonify({"error": "Freigabe nicht gefunden"}), 404
+    if shared:
+        chat_id = int(shared["chat_id"])
+        chat = shared
+        owner_id = int(shared["user_id"])
+        user_id = int(user["id"]) if user else None
+        history = fetch_messages_for_chat(chat_id)
+    elif not user:
         chat_id = 0
         history = []
         user_id = None
+        owner_id = None
+        chat = None
     else:
         user_id = int(user["id"])
+        owner_id = user_id
         if chat_id:
             chat = get_chat_for_user(chat_id, user_id)
             if not chat:
@@ -2344,11 +2439,11 @@ def send():
     persist_uploads = False
     try:
         for file in files:
-            upload_infos.append(save_upload(file, user_id=user_id, chat_id=chat_id if chat_id else None, message_id=None))
+            upload_infos.append(save_upload(file, user_id=owner_id or user_id, chat_id=chat_id if chat_id else None, message_id=None))
         attachment_text, image_payloads = prepare_attachment_context(upload_infos)
         project_context = ""
-        if user_id and chat:
-            project_context = "\n\n".join(x for x in [project_context_bundle(chat["project_id"], user_id), chat["project_context"] or ""] if x)
+        if chat and owner_id:
+            project_context = "\n\n".join(x for x in [project_context_bundle(chat["project_id"], owner_id), chat["project_context"] or ""] if x)
         image_generation = None
         assistant_meta = {}
         if wants_image_generation(text, has_attachment=has_attachment):
@@ -2370,7 +2465,7 @@ def send():
         title = None
         user_message_id = None
         assistant_id = None
-        if user_id:
+        if chat_id:
             public_uploads = [{k: v for k, v in u.items() if k != "stored"} for u in upload_infos]
             user_message_id = add_message(
                 chat_id,
@@ -2384,7 +2479,7 @@ def send():
                 generated_upload = save_generated_image(
                     image_generation["bytes"],
                     image_generation["mime"],
-                    user_id,
+                    owner_id or user_id,
                     chat_id,
                 )
                 assistant_meta["image_generation"] = {
@@ -2397,21 +2492,21 @@ def send():
                 with db() as con:
                     con.execute(
                         "UPDATE uploads SET message_id=? WHERE id=? AND user_id=?",
-                        (assistant_id, generated_upload["id"], user_id),
+                        (assistant_id, generated_upload["id"], owner_id or user_id),
                     )
                     con.commit()
             for upload in upload_infos:
                 with db() as con:
                     con.execute(
                         "UPDATE uploads SET chat_id=?, message_id=? WHERE id=? AND user_id=?",
-                        (chat_id, user_message_id, upload["id"], user_id),
+                        (chat_id, user_message_id, upload["id"], owner_id or user_id),
                     )
                     con.commit()
             persist_uploads = True
             if len(history) == 0:
                 title = generate_title(text, answer)
                 with db() as con:
-                    con.execute("UPDATE chats SET title=? WHERE id=? AND user_id=?", (title, chat_id, user_id))
+                    con.execute("UPDATE chats SET title=? WHERE id=?", (title, chat_id))
                     con.commit()
         elif image_generation:
             data_url = "data:{};base64,{}".format(
@@ -2428,7 +2523,7 @@ def send():
                     "size": len(image_generation["bytes"]),
                 },
             }
-        if not user_id:
+        if not user:
             increment_public_usage(has_attachment=bool(upload_infos))
         return jsonify(
             {
@@ -2456,7 +2551,7 @@ def send():
                     "content_html": render_markdown(answer),
                     "created_at": now_iso(),
                 },
-                "public_limit_reached": public_limit_reached() if not user_id else False,
+                "public_limit_reached": public_limit_reached() if not user else False,
             }
         )
     except ValueError as exc:
