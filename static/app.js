@@ -27,10 +27,12 @@ let csrfToken = '';
 let aiMode = 'holo';
 let responseFormat = 'auto';
 let currentChatHasContext = false;
+let currentShareToken = '';
+let currentSharedChat = false;
 const guestTokenKey = 'holo_rick_guest_token';
 
 const modeLabels = {
-  holo: 'ChatGPT',
+  holo: 'Holo Rick',
   precise: 'Präzise',
   deep: 'Deep Work',
   code: 'Code'
@@ -67,6 +69,7 @@ const icons = {
   'search': '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>',
   'message-circle': '<svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 17 0Z"/></svg>',
   'circle': '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></svg>',
+  'trash': '<svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>',
   'book': '<svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5Z"/></svg>',
   'briefcase': '<svg viewBox="0 0 24 24"><path d="M10 6V5a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v1"/><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M3 12h18"/></svg>',
   'layout-grid': '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>',
@@ -416,11 +419,14 @@ async function loadProjects() {
 function renderProjectsView() {
   showProjectsSurface();
   const rows = projects.map(p => `
-    <button class="project-row" type="button" data-id="${p.id}">
-      <span class="project-icon">${icons.folder}</span>
-      <span><strong>${esc(p.name)}</strong><small>${esc(p.description || 'Keine Beschreibung')}</small></span>
-      <em>${new Date(p.updated_at).toLocaleDateString('de-DE')}</em>
-    </button>`).join('');
+    <div class="project-row" data-id="${p.id}">
+      <button class="project-open" type="button">
+        <span class="project-icon">${icons.folder}</span>
+        <span><strong>${esc(p.name)}</strong><small>${esc(p.description || 'Keine Beschreibung')}</small></span>
+        <em>${new Date(p.updated_at).toLocaleDateString('de-DE')}</em>
+      </button>
+      <button class="project-delete" type="button" title="Projekt löschen">${icons['trash-2'] || icons.trash}</button>
+    </div>`).join('');
   $('#projectsView').innerHTML = `
     <div class="projects-shell">
       <div class="projects-head"><div><h1>Projekte</h1><p>Chats, Dateien und verdichtete Erinnerung bleiben pro Projekt zusammen – viel Kontext, wenig Tokens.</p></div><div class="project-tools"><input class="input" id="projectSearch" placeholder="Projekte suchen"><button class="primary" id="newProjectBtn" type="button">Neu</button></div></div>
@@ -429,7 +435,17 @@ function renderProjectsView() {
     </div>`;
   $('#newProjectBtn').onclick = () => openProjectModal();
   $('#projectSearch').oninput = e => { const q=e.target.value.toLowerCase(); document.querySelectorAll('.project-row').forEach(r => r.classList.toggle('hidden', !r.textContent.toLowerCase().includes(q))); };
-  document.querySelectorAll('.project-row').forEach(r => r.onclick = () => openProject(Number(r.dataset.id)));
+  document.querySelectorAll('.project-row').forEach(r => {
+    r.querySelector('.project-open').onclick = () => openProject(Number(r.dataset.id));
+    r.querySelector('.project-delete').onclick = async e => {
+      e.stopPropagation();
+      const name = r.querySelector('strong')?.textContent || 'dieses Projekt';
+      if (!confirm(`Projekt „${name}“ inklusive aller Chats wirklich löschen?`)) return;
+      await api('/api/projects/' + r.dataset.id, { method: 'DELETE' });
+      toast('Projekt gelöscht');
+      await showProjects();
+    };
+  });
 }
 
 async function showProjects() {
@@ -541,6 +557,8 @@ function renderChats() {
 
 async function loadChat(id) {
   showChatSurface();
+  currentShareToken = '';
+  currentSharedChat = false;
   const d = await api('/api/chats/' + id);
   currentChatId = id;
   currentProjectId = d.chat?.project_id || 0;
@@ -554,12 +572,24 @@ async function loadChat(id) {
 async function newChat() {
   showChatSurface();
   currentChatId = 0;
+  currentShareToken = '';
+  currentSharedChat = false;
   currentChatHasContext = false;
   updateContextIndicator();
   renderEmpty();
   renderChats();
   closeSidebar();
   input.focus();
+}
+
+function thinkingMarkup() {
+  return `
+    <div class="thinking-state" aria-label="Holo Rick denkt">
+      <svg class="thinking-wave" viewBox="0 0 120 32" role="img" aria-hidden="true">
+        <path d="M4 16 C 14 4, 26 4, 36 16 S 58 28, 68 16 S 90 4, 100 16 S 112 28, 116 16"/>
+      </svg>
+      <span>${aiMode === 'deep' ? 'Analysiere gründlich...' : 'Denke nach...'}</span>
+    </div>`;
 }
 
 async function send() {
@@ -583,6 +613,7 @@ async function send() {
   fd.append('message', text);
   fd.append('chat_id', currentChatId || 0);
   if (currentProjectId) fd.append('project_id', currentProjectId);
+  if (currentShareToken) fd.append('share_token', currentShareToken);
   fd.append('ai_mode', aiMode);
   fd.append('response_format', responseFormat);
   selectedFiles.forEach(f => fd.append('files', f));
@@ -590,7 +621,7 @@ async function send() {
 
   const wait = document.createElement('div');
   wait.className = 'msg assistant';
-  wait.innerHTML = `<div class="avatar h">H</div><div class="bubble"><div class="content typing">${aiMode === 'deep' ? 'Analysiere gründlich...' : 'Denke nach...'}</div></div>`;
+  wait.innerHTML = `<div class="avatar h">H</div><div class="bubble"><div class="content typing">${thinkingMarkup()}</div></div>`;
   messagesEl.appendChild(wait);
   scrollBottom();
 
@@ -770,7 +801,7 @@ async function runSmartAction(action, sourceMessageId, sourceContent) {
 }
 
 function setActiveNav(id) {
-  ['homeBtn', 'searchBtn', 'libraryBtn', 'projectsBtn', 'appsBtn', 'archiveBtn'].forEach(navId => {
+  ['homeBtn', 'searchBtn', 'projectsBtn', 'archiveBtn'].forEach(navId => {
     document.getElementById(navId)?.classList.toggle('active', navId === id);
   });
 }
@@ -778,7 +809,7 @@ function setActiveNav(id) {
 function updateModeUi() {
   document.querySelectorAll('.mode-option').forEach(btn => btn.classList.toggle('active', btn.dataset.mode === aiMode));
   document.querySelectorAll('.format-option').forEach(btn => btn.classList.toggle('active', btn.dataset.format === responseFormat));
-  $('#activeModeLabel').innerHTML = `<span>${esc(modeLabels[aiMode] || 'ChatGPT')}</span><small>${esc(formatLabels[responseFormat] || 'Auto')}</small><i data-icon="chevron-down"></i>`;
+  $('#activeModeLabel').innerHTML = `<span>${esc(modeLabels[aiMode] || 'Holo Rick')}</span><small>${esc(formatLabels[responseFormat] || 'Auto')}</small><i data-icon="chevron-down"></i>`;
   injectIcons($('#activeModeLabel'));
 }
 
@@ -1021,6 +1052,42 @@ function setAdminSettingsAvailable(canAdmin) {
   $('.sticky-actions')?.classList.toggle('hidden', !canAdmin);
 }
 
+async function createShareLink() {
+  if (!me.authenticated) {
+    setAuthMode('login');
+    $('#loginModal').classList.remove('hidden');
+    return;
+  }
+  if (!currentChatId) {
+    toast('Erst einen Chat starten, dann teilen.');
+    return;
+  }
+  const d = await api('/api/chats/' + currentChatId + '/share', { method: 'POST' });
+  $('#shareLinkInput').value = d.url;
+  try {
+    await navigator.clipboard.writeText(d.url);
+    toast('Teillink kopiert');
+  } catch {
+    toast('Teillink erstellt');
+  }
+}
+
+async function openSharedChatFromUrl() {
+  const match = location.pathname.match(/^\/share\/([^/]+)$/);
+  if (!match) return false;
+  currentShareToken = decodeURIComponent(match[1]);
+  currentSharedChat = true;
+  showChatSurface();
+  const d = await api('/api/shared/' + encodeURIComponent(currentShareToken));
+  currentChatId = d.chat.chat_id;
+  currentProjectId = d.chat.project_id || 0;
+  currentChatHasContext = !!(d.chat.project_context || currentProjectId);
+  updateContextIndicator();
+  renderMessages(d.messages);
+  closeSidebar();
+  return true;
+}
+
 function bindEvents() {
   bindDismissibleModals();
   form.onsubmit = e => { e.preventDefault(); send(); };
@@ -1056,9 +1123,14 @@ function bindEvents() {
   $('#newChatBtn').onclick = newChat;
   $('#projectsBtn').onclick = () => showProjects().catch(e => showError(e, 'Projekte nicht verfügbar'));
   $('#searchBtn').onclick = () => { setActiveNav('searchBtn'); $('#chatSearch').focus(); };
-  $('#libraryBtn').onclick = () => { setActiveNav('libraryBtn'); archivedView = false; showChatSurface(); loadChats(); };
-  $('#appsBtn').onclick = () => { setActiveNav('appsBtn'); $('#settingsModal').classList.remove('hidden'); };
   $('#closeProjectBtn')?.addEventListener('click', () => $('#projectModal')?.classList.add('hidden'));
+  $('#closeShareBtn')?.addEventListener('click', () => $('#shareModal')?.classList.add('hidden'));
+  $('#createShareBtn')?.addEventListener('click', () => createShareLink().catch(e => showError(e, 'Teillink konnte nicht erstellt werden')));
+  $('#copyShareBtn')?.addEventListener('click', () => {
+    const link = $('#shareLinkInput').value;
+    if (!link) return createShareLink().catch(e => showError(e, 'Teillink konnte nicht erstellt werden'));
+    navigator.clipboard.writeText(link).then(() => toast('Teillink kopiert'));
+  });
   $('#saveProjectBtn')?.addEventListener('click', () => saveProject().catch(e => showError(e, 'Projekt konnte nicht gespeichert werden')));
   $('#projectBriefBtn')?.addEventListener('click', () => refreshProjectMemory().catch(e => showError(e, 'Erinnerung fehlgeschlagen')));
   $('#activeModeLabel').onclick = e => {
@@ -1102,6 +1174,10 @@ function bindEvents() {
     setActiveNav('archiveBtn');
     $('#sectionTitle').textContent = 'Archiv';
     loadChats();
+  };
+  $('.share-btn').onclick = () => {
+    $('#shareModal').classList.remove('hidden');
+    if (currentShareToken) $('#shareLinkInput').value = location.href;
   };
   $('#retitleBtn').onclick = async () => {
     if (!currentChatId) return;
@@ -1168,6 +1244,10 @@ async function boot() {
   updateContextIndicator();
   renderEmpty();
   await refreshMe();
+  if (await openSharedChatFromUrl()) {
+    input.focus();
+    return;
+  }
   if (me.authenticated) {
     if (me.role === 'admin') await loadSettings();
     await loadChats();
