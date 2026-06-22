@@ -1363,22 +1363,31 @@ button { color: inherit; }
 .thinking-state {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 11px;
   color: var(--muted);
 }
-.thinking-wave {
-  width: 92px;
+.thinking-orb {
+  width: 28px;
   height: 28px;
-  fill: none;
-  stroke: #fff;
-  stroke-width: 3;
-  stroke-linecap: round;
-  opacity: .9;
-  animation: thinkingPulse 1.25s ease-in-out infinite;
+  border-radius: 50%;
+  position: relative;
+  display: inline-block;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255,255,255,.22) 0 22%, transparent 24%),
+    conic-gradient(from 0deg, rgba(255,255,255,0), rgba(255,255,255,.18), rgba(255,255,255,.92), rgba(255,255,255,.18), rgba(255,255,255,0));
+  filter: blur(.15px) drop-shadow(0 0 10px rgba(255,255,255,.22));
+  animation: smokySpin 1.05s linear infinite;
 }
-@keyframes thinkingPulse {
-  0%, 100% { transform: scaleX(.92); opacity: .38; }
-  50% { transform: scaleX(1.04); opacity: 1; }
+.thinking-orb::after {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: inset 0 0 12px rgba(255,255,255,.06);
+}
+@keyframes smokySpin {
+  to { transform: rotate(360deg); }
 }
 
 .project-row {
