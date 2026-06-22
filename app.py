@@ -835,12 +835,12 @@ def render_markdown(text: str) -> str:
     return bleach.linkify(clean, callbacks=[bleach.callbacks.nofollow, bleach.callbacks.target_blank])
 
 
-def create_chat(user_id: int, title="Neuer Chat") -> int:
+def create_chat(user_id: int, title="Neuer Chat", project_id: int | None = None) -> int:
     ts = now_iso()
     with db() as con:
         cur = con.execute(
-            "INSERT INTO chats(user_id,title,created_at,updated_at) VALUES(?,?,?,?)",
-            (user_id, title, ts, ts),
+            "INSERT INTO chats(user_id,project_id,title,created_at,updated_at) VALUES(?,?,?,?,?)",
+            (user_id, project_id, title, ts, ts),
         )
         con.commit()
         return int(cur.lastrowid)
