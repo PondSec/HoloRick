@@ -70,9 +70,7 @@ const icons = {
   'message-circle': '<svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 17 0Z"/></svg>',
   'circle': '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></svg>',
   'trash': '<svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>',
-  'book': '<svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5Z"/></svg>',
   'briefcase': '<svg viewBox="0 0 24 24"><path d="M10 6V5a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v1"/><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M3 12h18"/></svg>',
-  'layout-grid': '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>',
   'wand': '<svg viewBox="0 0 24 24"><path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9H6"/><path d="M20 9h-2"/><path d="m17.8 6.2 1.4-1.4"/><path d="m10.8 13.2-1.4 1.4"/><path d="m9.4 3.8 1.4 1.4"/><path d="m14 10 7 7-4 4-7-7Z"/></svg>',
   'chevron-down': '<svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>',
   'archive': '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg>',
@@ -585,9 +583,7 @@ async function newChat() {
 function thinkingMarkup() {
   return `
     <div class="thinking-state" aria-label="Holo Rick denkt">
-      <svg class="thinking-wave" viewBox="0 0 120 32" role="img" aria-hidden="true">
-        <path d="M4 16 C 14 4, 26 4, 36 16 S 58 28, 68 16 S 90 4, 100 16 S 112 28, 116 16"/>
-      </svg>
+      <span class="thinking-orb" aria-hidden="true"></span>
       <span>${aiMode === 'deep' ? 'Analysiere gründlich...' : 'Denke nach...'}</span>
     </div>`;
 }
