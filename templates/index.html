@@ -241,6 +241,16 @@
     </div>
   </div>
 </div>
+<div class="modal hidden" id="projectModal">
+  <div class="modal-card project-card">
+    <div class="modal-head"><div><h2 id="projectModalTitle">Projekt</h2><p class="muted">Gemeinsamer Kontext für alle Chats in diesem Projekt.</p></div><button class="modal-close" id="closeProjectBtn" data-icon="x"></button></div>
+    <label>Name</label><input class="input" id="projectName" maxlength="80">
+    <label>Beschreibung</label><input class="input" id="projectDescription" maxlength="600" placeholder="Ziel, Produkt, Kunde, Tonalität...">
+    <label>Manueller Projektkontext</label><textarea class="textarea context-area" id="projectSharedContext" placeholder="Fakten, Regeln, Präferenzen, No-Gos..."></textarea>
+    <label>Automatische Projekterinnerung</label><textarea class="textarea context-area" id="projectMemory" readonly></textarea>
+    <div class="context-actions"><button class="ghost" id="projectBriefBtn" type="button">Erinnerung aktualisieren</button><button class="primary" id="saveProjectBtn" type="button">Speichern</button></div>
+  </div>
+</div>
 <div class="toast hidden" id="toast"></div>
 <script src="/static/app.js?v={{ asset_version }}"></script>
 <div class="modal hidden" id="projectModal">
