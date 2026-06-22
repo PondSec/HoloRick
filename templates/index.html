@@ -15,6 +15,7 @@
     </div>
     <div class="search-wrap"><span data-icon="search"></span><input id="chatSearch" placeholder="Suche"></div>
     <button class="nav-pill active" id="homeBtn"><span data-icon="message-circle"></span><span>Holo Rick</span></button>
+    <button class="nav-pill" id="projectsBtn"><span data-icon="folder"></span><span>Projekte</span></button>
     <button class="nav-pill" id="archiveBtn"><span data-icon="archive"></span><span>Archiv</span></button>
     <div class="section-title" id="sectionTitle">Aktuelle</div>
     <div class="chat-list" id="chatList"></div>
@@ -35,6 +36,7 @@
       </div>
     </header>
     <section class="messages" id="messages"></section>
+    <section class="projects-view hidden" id="projectsView"></section>
     <div class="limit-banner hidden" id="limitBanner">Nutzungslimit erreicht. Für Zugang oder eine Partnerschaft kontaktieren Sie <a href="mailto:chat@pondsec.com">chat@pondsec.com</a>.</div>
     <div class="mode-popover hidden" id="modePopover">
       <div class="popover-label">Stil</div>
@@ -241,5 +243,15 @@
 </div>
 <div class="toast hidden" id="toast"></div>
 <script src="/static/app.js?v={{ asset_version }}"></script>
+<div class="modal hidden" id="projectModal">
+  <div class="modal-card project-card">
+    <div class="modal-head"><div><h2 id="projectModalTitle">Projekt</h2><p class="muted">Gemeinsamer Kontext für alle Chats in diesem Projekt.</p></div><button class="modal-close" id="closeProjectBtn" data-icon="x"></button></div>
+    <label>Name</label><input class="input" id="projectName" maxlength="80">
+    <label>Beschreibung</label><input class="input" id="projectDescription" maxlength="600" placeholder="Ziel, Produkt, Kunde, Tonalität...">
+    <label>Manueller Projektkontext</label><textarea class="textarea context-area" id="projectSharedContext" placeholder="Fakten, Regeln, Präferenzen, No-Gos..."></textarea>
+    <label>Automatische Projekterinnerung</label><textarea class="textarea context-area" id="projectMemory" readonly></textarea>
+    <div class="context-actions"><button class="ghost" id="projectBriefBtn" type="button">Erinnerung aktualisieren</button><button class="primary" id="saveProjectBtn" type="button">Speichern</button></div>
+  </div>
+</div>
 </body>
 </html>
