@@ -24,7 +24,7 @@
     <div class="chat-list" id="chatList"></div>
     <div class="account" id="accountBtn">
       <div class="account-avatar">JP</div>
-      <div class="account-copy"><div id="accountName">Gast</div><small id="accountSub">Testzugang</small></div><button class="upgrade-mini" type="button">Upgrade</button>
+      <div class="account-copy"><div id="accountName">Gast</div><small id="accountSub">Testzugang</small></div>
     </div>
   </aside>
   <div class="backdrop" id="backdrop"></div>
@@ -33,7 +33,6 @@
       <button class="icon-btn mobile-only" id="openSidebarBtn" data-icon="sidebar"></button>
       <button class="model-pill" id="activeModeLabel" type="button" aria-haspopup="dialog" aria-expanded="false"><span>Holo Rick</span><small>Auto</small><i data-icon="chevron-down"></i></button>
       <div class="top-actions">
-        <button class="top-upgrade" type="button">Upgrade</button>
         <button class="share-btn" type="button">Gemeinsam nutzen</button>
         <button class="icon-btn" id="contextBtn" title="Projektkontext" data-icon="file-text"></button>
         <button class="icon-btn" id="retitleBtn" title="Titel neu generieren" data-icon="sparkles"></button>
@@ -246,6 +245,15 @@
     </div>
   </div>
 </div>
+<div class="modal hidden" id="shareModal">
+  <div class="modal-card share-card">
+    <div class="modal-head"><div><h2>Chat teilen</h2><p class="muted">Erstellt einen sicheren Link. Jeder mit Link sieht den ganzen Chat und kann mitschreiben.</p></div><button class="modal-close" id="closeShareBtn" data-icon="x"></button></div>
+    <label>Sicherer Link</label>
+    <input class="input" id="shareLinkInput" readonly placeholder="Noch kein Link erstellt">
+    <p class="privacy-note">Nicht angemeldete Gäste behalten ihre Limits. Angemeldete Konten schreiben ohne Gastlimit.</p>
+    <div class="context-actions"><button class="ghost" id="copyShareBtn" type="button">Kopieren</button><button class="primary" id="createShareBtn" type="button">Link erstellen</button></div>
+  </div>
+</div>
 <div class="modal hidden" id="projectModal">
   <div class="modal-card project-card">
     <div class="modal-head"><div><h2 id="projectModalTitle">Projekt</h2><p class="muted">Gemeinsamer Kontext für alle Chats in diesem Projekt.</p></div><button class="modal-close" id="closeProjectBtn" data-icon="x"></button></div>
@@ -258,15 +266,5 @@
 </div>
 <div class="toast hidden" id="toast"></div>
 <script src="/static/app.js?v={{ asset_version }}"></script>
-<div class="modal hidden" id="projectModal">
-  <div class="modal-card project-card">
-    <div class="modal-head"><div><h2 id="projectModalTitle">Projekt</h2><p class="muted">Gemeinsamer Kontext für alle Chats in diesem Projekt.</p></div><button class="modal-close" id="closeProjectBtn" data-icon="x"></button></div>
-    <label>Name</label><input class="input" id="projectName" maxlength="80">
-    <label>Beschreibung</label><input class="input" id="projectDescription" maxlength="600" placeholder="Ziel, Produkt, Kunde, Tonalität...">
-    <label>Manueller Projektkontext</label><textarea class="textarea context-area" id="projectSharedContext" placeholder="Fakten, Regeln, Präferenzen, No-Gos..."></textarea>
-    <label>Automatische Projekterinnerung</label><textarea class="textarea context-area" id="projectMemory" readonly></textarea>
-    <div class="context-actions"><button class="ghost" id="projectBriefBtn" type="button">Erinnerung aktualisieren</button><button class="primary" id="saveProjectBtn" type="button">Speichern</button></div>
-  </div>
-</div>
 </body>
 </html>
