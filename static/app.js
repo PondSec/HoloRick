@@ -15,6 +15,9 @@ const contextDrawer = $('#contextDrawer');
 
 let chats = [];
 let currentChatId = 0;
+let currentProjectId = 0;
+let projects = [];
+let currentProject = null;
 let archivedView = false;
 let me = { authenticated: false };
 let selectedFiles = [];
@@ -79,7 +82,9 @@ const icons = {
   'key-round': '<svg viewBox="0 0 24 24"><path d="M2 18v3h3l9.2-9.2"/><circle cx="16.5" cy="7.5" r="5.5"/></svg>',
   'smartphone': '<svg viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>',
   'copy': '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><rect x="2" y="2" width="13" height="13" rx="2"/></svg>',
-  'download': '<svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>'
+  'download': '<svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>',
+  'folder': '<svg viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.5L10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z"/></svg>',
+  'more-horizontal': '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>'
 };
 
 function injectIcons(root = document) {
@@ -249,7 +254,20 @@ function bindDismissibleModals() {
   });
 }
 
+function showChatSurface() {
+  $('#projectsView')?.classList.add('hidden');
+  messagesEl.classList.remove('hidden');
+  form.classList.remove('hidden');
+}
+
+function showProjectsSurface() {
+  messagesEl.classList.add('hidden');
+  form.classList.add('hidden');
+  $('#projectsView')?.classList.remove('hidden');
+}
+
 function renderEmpty() {
+  showChatSurface();
   const chips = quickPrompts.map(item => `<button type="button" class="prompt-chip" data-prompt="${esc(item.prompt)}">${esc(item.label)}</button>`).join('');
   messagesEl.innerHTML = `
     <div class="empty">
@@ -384,6 +402,90 @@ async function refreshMe() {
   limitBanner.classList.toggle('hidden', !limited);
 }
 
+async function loadProjects() {
+  if (!me.authenticated) { projects = []; return; }
+  projects = await api('/api/projects');
+}
+
+function renderProjectsView() {
+  showProjectsSurface();
+  const rows = projects.map(p => `
+    <button class="project-row" type="button" data-id="${p.id}">
+      <span class="project-icon">${icons.folder}</span>
+      <span><strong>${esc(p.name)}</strong><small>${esc(p.description || 'Keine Beschreibung')}</small></span>
+      <em>${new Date(p.updated_at).toLocaleDateString('de-DE')}</em>
+    </button>`).join('');
+  $('#projectsView').innerHTML = `
+    <div class="projects-shell">
+      <div class="projects-head"><div><h1>Projekte</h1><p>Chats, Dateien und verdichtete Erinnerung bleiben pro Projekt zusammen – viel Kontext, wenig Tokens.</p></div><div class="project-tools"><input class="input" id="projectSearch" placeholder="Projekte suchen"><button class="primary" id="newProjectBtn" type="button">Neu</button></div></div>
+      <div class="project-tabs"><button class="active">Alle</button><button>Von dir erstellt</button></div>
+      <div class="project-table"><div class="project-table-head"><span>Name</span><span>Geändert</span></div>${rows || '<div class="empty-list">Noch keine Projekte.</div>'}</div>
+    </div>`;
+  $('#newProjectBtn').onclick = () => openProjectModal();
+  $('#projectSearch').oninput = e => { const q=e.target.value.toLowerCase(); document.querySelectorAll('.project-row').forEach(r => r.classList.toggle('hidden', !r.textContent.toLowerCase().includes(q))); };
+  document.querySelectorAll('.project-row').forEach(r => r.onclick = () => openProject(Number(r.dataset.id)));
+}
+
+async function showProjects() {
+  if (!me.authenticated) { setAuthMode('login'); $('#loginModal').classList.remove('hidden'); return; }
+  await loadProjects();
+  $('#homeBtn').classList.remove('active');
+  $('#archiveBtn').classList.remove('active');
+  $('#projectsBtn').classList.add('active');
+  renderProjectsView();
+}
+
+async function openProject(id) {
+  const d = await api('/api/projects/' + id);
+  currentProjectId = id;
+  currentProject = d.project;
+  showChatSurface();
+  $('#homeBtn').classList.remove('active');
+  $('#archiveBtn').classList.remove('active');
+  $('#projectsBtn').classList.add('active');
+  messagesEl.innerHTML = `<div class="project-home"><div class="project-title">${icons.folder}<h1>${esc(d.project.name)}</h1><button class="ghost" id="editProjectBtn" type="button">Kontext</button></div><div class="composer-preview" id="projectNewChat">+ Neuer Chat in ${esc(d.project.name)}</div><div class="project-tabs"><button class="active">Chats</button><button>Quellen</button></div><div class="project-chat-list">${d.chats.map(c => `<button class="project-chat-row" data-id="${c.id}"><span><strong>${esc(c.title)}</strong><small>Projektchat</small></span><em>${new Date(c.updated_at).toLocaleDateString('de-DE')}</em></button>`).join('') || '<div class="empty-list">Noch keine Chats im Projekt.</div>'}</div></div>`;
+  $('#editProjectBtn').onclick = () => openProjectModal(d.project);
+  $('#projectNewChat').onclick = newChat;
+  document.querySelectorAll('.project-chat-row').forEach(r => r.onclick = () => loadChat(Number(r.dataset.id)));
+}
+
+async function openProjectModal(project = null) {
+  currentProject = project || null;
+  $('#projectModalTitle').textContent = project ? 'Projekt bearbeiten' : 'Neues Projekt';
+  $('#projectName').value = project?.name || '';
+  $('#projectDescription').value = project?.description || '';
+  $('#projectSharedContext').value = project?.shared_context || '';
+  $('#projectMemory').value = project?.memory_summary || '';
+  $('#projectModal').classList.remove('hidden');
+  $('#projectName').focus();
+}
+
+async function saveProject() {
+  const body = { name: $('#projectName').value || 'Neues Projekt', description: $('#projectDescription').value, shared_context: $('#projectSharedContext').value };
+  if (currentProject?.id) {
+    await api('/api/projects/' + currentProject.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    $('#projectModal').classList.add('hidden');
+    await openProject(currentProject.id);
+  } else {
+    const d = await api('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    await api('/api/projects/' + d.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    $('#projectModal').classList.add('hidden');
+    await openProject(d.id);
+  }
+  await loadChats();
+  toast('Projekt gespeichert');
+}
+
+async function refreshProjectMemory() {
+  if (!currentProject?.id) return toast('Projekt erst speichern');
+  $('#projectBriefBtn').disabled = true;
+  try {
+    const d = await api('/api/projects/' + currentProject.id + '/memory/brief', { method: 'POST' });
+    $('#projectMemory').value = d.memory_summary || '';
+    toast('Projekt-Erinnerung aktualisiert');
+  } finally { $('#projectBriefBtn').disabled = false; }
+}
+
 async function loadChats() {
   if (!me.authenticated) {
     chatList.innerHTML = '';
@@ -436,9 +538,11 @@ function renderChats() {
 }
 
 async function loadChat(id) {
+  showChatSurface();
   const d = await api('/api/chats/' + id);
   currentChatId = id;
-  currentChatHasContext = !!d.chat?.project_context;
+  currentProjectId = d.chat?.project_id || 0;
+  currentChatHasContext = !!(d.chat?.project_context || currentProjectId);
   updateContextIndicator();
   renderMessages(d.messages);
   renderChats();
@@ -446,6 +550,7 @@ async function loadChat(id) {
 }
 
 async function newChat() {
+  showChatSurface();
   currentChatId = 0;
   currentChatHasContext = false;
   updateContextIndicator();
@@ -475,6 +580,7 @@ async function send() {
   const fd = new FormData();
   fd.append('message', text);
   fd.append('chat_id', currentChatId || 0);
+  if (currentProjectId) fd.append('project_id', currentProjectId);
   fd.append('ai_mode', aiMode);
   fd.append('response_format', responseFormat);
   selectedFiles.forEach(f => fd.append('files', f));
@@ -573,7 +679,7 @@ async function ensureChatForContext() {
     throw new Error('Login erforderlich');
   }
   if (!currentChatId) {
-    const d = await api('/api/chats', { method: 'POST' });
+    const d = await api('/api/chats', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: currentProjectId || null }) });
     currentChatId = d.id;
     await loadChats();
     renderChats();
@@ -939,6 +1045,10 @@ function bindEvents() {
     addSelectedFiles(files);
   });
   $('#newChatBtn').onclick = newChat;
+  $('#projectsBtn').onclick = () => showProjects().catch(e => showError(e, 'Projekte nicht verfügbar'));
+  $('#closeProjectBtn').onclick = () => $('#projectModal').classList.add('hidden');
+  $('#saveProjectBtn').onclick = () => saveProject().catch(e => showError(e, 'Projekt konnte nicht gespeichert werden'));
+  $('#projectBriefBtn').onclick = () => refreshProjectMemory().catch(e => showError(e, 'Erinnerung fehlgeschlagen'));
   $('#activeModeLabel').onclick = e => {
     e.stopPropagation();
     toggleModePopover();
@@ -966,16 +1076,22 @@ function bindEvents() {
   backdrop.onclick = closeSidebar;
   $('#chatSearch').oninput = renderChats;
   $('#homeBtn').onclick = () => {
+    showChatSurface();
+    currentProjectId = 0;
     archivedView = false;
     $('#homeBtn').classList.add('active');
+    $('#projectsBtn').classList.remove('active');
     $('#archiveBtn').classList.remove('active');
     $('#sectionTitle').textContent = 'Aktuelle';
     loadChats();
   };
   $('#archiveBtn').onclick = () => {
+    showChatSurface();
+    currentProjectId = 0;
     archivedView = true;
     $('#archiveBtn').classList.add('active');
     $('#homeBtn').classList.remove('active');
+    $('#projectsBtn').classList.remove('active');
     $('#sectionTitle').textContent = 'Archiv';
     loadChats();
   };
