@@ -85,7 +85,7 @@
     </form>
     <div class="hint">Holo Rick kann falschliegen. Prüf Wichtiges selbst, bevor du die Realität umbaust.</div>
   </main>
-  <aside class="workspace-panel" id="workspacePanel" aria-label="Workspace">
+  <aside class="workspace-panel is-collapsed" id="workspacePanel" aria-label="Workspace" aria-expanded="false">
     <div class="workspace-head">
       <div>
         <strong>Workspace</strong>
@@ -93,9 +93,10 @@
       </div>
       <div class="workspace-head-actions">
         <button class="icon-btn mobile-only" id="closeWorkspaceBtn" title="Workspace schließen" data-icon="x"></button>
-        <button class="icon-btn desktop-only" id="collapseWorkspaceBtn" title="Workspace einklappen" data-icon="layout-panel-right"></button>
+        <button class="icon-btn desktop-only" id="collapseWorkspaceBtn" title="Workspace aufklappen" data-icon="layout-panel-left"></button>
       </div>
     </div>
+
     <nav class="workspace-tabs" id="workspaceTabs">
       <button class="active" data-tab="answer" type="button">Antwort</button>
       <button data-tab="files" type="button">Dateien</button>
@@ -104,9 +105,10 @@
       <button data-tab="tasks" type="button">Tasks</button>
       <button data-tab="sources" type="button">Quellen</button>
     </nav>
+
     <section class="workspace-body" id="workspaceBody"></section>
   </aside>
-</div>
+  </div>
 
 <div class="modal auth-modal hidden" id="loginModal">
   <div class="auth-stage">
