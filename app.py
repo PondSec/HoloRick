@@ -334,6 +334,8 @@ def init_db():
                 privacy_version TEXT,
                 terms_version TEXT,
                 registration_ip_hash TEXT,
+                onboarding_completed_at TEXT,
+                onboarding_dismissed_at TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
@@ -551,6 +553,8 @@ def init_db():
             ("users", "privacy_version", "TEXT"),
             ("users", "terms_version", "TEXT"),
             ("users", "registration_ip_hash", "TEXT"),
+            ("users", "onboarding_completed_at", "TEXT"),
+            ("users", "onboarding_dismissed_at", "TEXT"),
         ]:
             try:
                 ensure_column(con, table, column, definition)
@@ -3142,6 +3146,8 @@ def me():
             "display_name": user["display_name"] if user else None,
             "role": user["role"] if user else None,
             "two_factor_enabled": bool(user and user["totp_enabled"]),
+            "onboarding_completed": bool(user and (user["onboarding_completed_at"] or user["onboarding_dismissed_at"])),
+            "needs_onboarding": bool(user and not user["onboarding_completed_at"] and not user["onboarding_dismissed_at"]),
             "csrf_token": csrf_token(),
             "max_upload_mb": MAX_UPLOAD_MB,
             "max_files_per_message": MAX_FILES_PER_MESSAGE,
@@ -3258,6 +3264,20 @@ def register():
     session["user_id"] = user_id
     session["email"] = email
     csrf_token()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/onboarding/complete", methods=["POST"])
+def complete_onboarding():
+    user = current_user()
+    if not user:
+        return jsonify({"error": "Bitte anmelden"}), 401
+    data = request.get_json() or {}
+    dismissed = bool(data.get("dismissed"))
+    column = "onboarding_dismissed_at" if dismissed else "onboarding_completed_at"
+    with db() as con:
+        con.execute(f"UPDATE users SET {column}=?, updated_at=? WHERE id=?", (now_iso(), now_iso(), user["id"]))
+        con.commit()
     return jsonify({"ok": True})
 
 

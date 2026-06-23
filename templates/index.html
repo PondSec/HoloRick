@@ -17,7 +17,7 @@
     <button class="nav-pill active" id="homeBtn"><span data-icon="home"></span><span>Home</span></button>
     <button class="nav-pill" id="searchBtn" type="button"><span data-icon="search"></span><span>Search</span></button>
     <button class="nav-pill" id="projectsBtn"><span data-icon="briefcase"></span><span>Projects</span></button>
-    <button class="nav-pill" id="memoryBtn" type="button"><span data-icon="brain"></span><span>Memory</span></button>
+    <button class="nav-pill" id="memoryBtn" type="button" data-tour="memory"><span data-icon="brain"></span><span>Memory</span></button>
     <button class="nav-pill" id="archiveBtn"><span data-icon="archive"></span><span>Archiv</span></button>
     <div class="section-title-row"><div class="section-title" id="sectionTitle">Aktuelle</div><button class="mini-btn section-new-chat" id="sectionNewChatBtn" type="button" title="Neuer Chat" aria-label="Neuer Chat" data-icon="plus"></button></div>
     <div class="chat-list" id="chatList"></div>
@@ -74,7 +74,7 @@
       </div>
     </div>
     <div class="rate-banner hidden" id="rateBanner"></div>
-    <form class="composer" id="composerForm">
+    <form class="composer" id="composerForm" data-tour="chat">
       <input type="file" id="fileInput" multiple hidden accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.md,.py,.js,.ts,.html,.css,.json,.yml,.yaml,.toml,.log,.csv,image/*">
       <button type="button" class="attach-btn" id="attachBtn" title="Dateien anhängen" data-icon="plus"></button>
       <div class="composer-main">
@@ -85,7 +85,7 @@
     </form>
     <div class="hint">Holo Rick kann falschliegen. Prüf Wichtiges selbst, bevor du die Realität umbaust.</div>
   </main>
-  <aside class="workspace-panel" id="workspacePanel" aria-label="Workspace">
+  <aside class="workspace-panel" id="workspacePanel" aria-label="Workspace" data-tour="workspace">
     <div class="workspace-head">
       <div>
         <strong>Workspace</strong>
@@ -108,7 +108,7 @@
   </aside>
 </div>
 
-<div class="modal auth-modal hidden" id="loginModal">
+<div class="auth-page hidden" id="loginModal" aria-label="Kontozugang">
   <div class="auth-stage">
     <section class="auth-intro">
       <div class="auth-mark">H</div>
@@ -121,7 +121,7 @@
       </div>
     </section>
     <div class="modal-card auth-card">
-      <button class="modal-close" id="closeLoginBtn" data-icon="x"></button>
+      <button class="modal-close" id="closeLoginBtn" data-icon="x" title="Zurück zur App"></button>
       <h2 id="authTitle">Anmelden</h2>
       <p class="muted" id="authIntro">Mit Konto bekommst du Chat-Historie, Uploads, Projektkontext und unbegrenzte Nutzung.</p>
       <div class="auth-tabs">
@@ -146,6 +146,21 @@
         <label class="check consent-check"><input type="checkbox" id="privacyAccepted"><span>Ich akzeptiere Datenschutz- und Nutzungsbedingungen und stimme der Verarbeitung meiner Kontodaten zu.</span></label>
         <button class="primary full" id="registerBtn">Konto erstellen</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<div class="onboarding-layer hidden" id="onboardingLayer" aria-live="polite">
+  <div class="onboarding-backdrop"></div>
+  <div class="onboarding-spotlight" id="onboardingSpotlight"></div>
+  <div class="onboarding-card" id="onboardingCard">
+    <div class="onboarding-kicker">Kurze Einführung</div>
+    <h2 id="onboardingTitle">Willkommen</h2>
+    <p id="onboardingText"></p>
+    <div class="onboarding-progress" id="onboardingProgress"></div>
+    <div class="onboarding-actions">
+      <button class="ghost" id="onboardingSkipBtn" type="button">Überspringen</button>
+      <button class="primary" id="onboardingNextBtn" type="button">Weiter</button>
     </div>
   </div>
 </div>

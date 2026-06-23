@@ -42,6 +42,7 @@ let selectedMetadata = null;
 let memoryItems = [];
 let memoryFilters = { q: '', scope: 'all', archived: false };
 let editingMemoryId = '';
+let onboardingStepIndex = 0;
 const guestTokenKey = 'holo_rick_guest_token';
 
 const modeLabels = {
@@ -701,6 +702,138 @@ async function refreshMe() {
     : `${me.public_messages_used || 0}/${me.public_message_limit || 3} frei`;
   const limited = me.public_limit_reached || me.public_attachment_limit_reached;
   limitBanner.classList.toggle('hidden', !limited);
+}
+
+
+const onboardingSteps = [
+  {
+    selector: '[data-tour="chat"]',
+    title: 'Chat: dein ruhiger Startpunkt',
+    text: 'Stelle Fragen, hänge Dateien an und arbeite Schritt für Schritt weiter. Alles bleibt in deinem Konto wiederauffindbar.'
+  },
+  {
+    selector: '[data-tour="memory"]',
+    title: 'Memory: wichtige Dinge bleiben präsent',
+    text: 'Lege dauerhafte Notizen, Präferenzen und Projektdetails ab, damit Holo Rick weniger raten muss und hilfreicher antwortet.'
+  },
+  {
+    selector: '[data-tour="workspace"]',
+    title: 'Workspace: Ergebnisse sauber ordnen',
+    text: 'Hier findest du Antworten, Dateien, Quellen, Tasks und Artefakte getrennt vom Chat – professioneller Kontext statt Fenster-Chaos.'
+  }
+];
+
+function clearOnboardingFocus() {
+  const spotlight = $('#onboardingSpotlight');
+  if (spotlight) spotlight.classList.add('hidden');
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function placeOnboardingSpotlight(target) {
+  const spotlight = $('#onboardingSpotlight');
+  if (!spotlight || !target) return null;
+  const rect = target.getBoundingClientRect();
+  const pad = 8;
+  const box = {
+    left: clamp(rect.left - pad, 10, window.innerWidth - 20),
+    top: clamp(rect.top - pad, 10, window.innerHeight - 20),
+    width: Math.min(rect.width + pad * 2, window.innerWidth - 20),
+    height: Math.min(rect.height + pad * 2, window.innerHeight - 20)
+  };
+  spotlight.style.left = `${box.left}px`;
+  spotlight.style.top = `${box.top}px`;
+  spotlight.style.width = `${box.width}px`;
+  spotlight.style.height = `${box.height}px`;
+  spotlight.classList.remove('hidden');
+  return box;
+}
+
+function positionOnboardingCard(target) {
+  const card = $('#onboardingCard');
+  if (!card || !target) return;
+  const box = placeOnboardingSpotlight(target) || target.getBoundingClientRect();
+  const cardRect = card.getBoundingClientRect();
+  const gap = 18;
+  const margin = 16;
+  const spaces = {
+    right: window.innerWidth - (box.left + box.width),
+    left: box.left,
+    bottom: window.innerHeight - (box.top + box.height),
+    top: box.top
+  };
+  let left;
+  let top;
+  if (spaces.top >= cardRect.height + gap) {
+    left = box.left + box.width / 2 - cardRect.width / 2;
+    top = box.top - cardRect.height - gap;
+  } else if (spaces.bottom >= cardRect.height + gap) {
+    left = box.left + box.width / 2 - cardRect.width / 2;
+    top = box.top + box.height + gap;
+  } else if (spaces.right >= cardRect.width + gap) {
+    left = box.left + box.width + gap;
+    top = box.top + box.height / 2 - cardRect.height / 2;
+  } else if (spaces.left >= cardRect.width + gap) {
+    left = box.left - cardRect.width - gap;
+    top = box.top + box.height / 2 - cardRect.height / 2;
+  } else {
+    left = window.innerWidth - cardRect.width - margin;
+    top = margin;
+  }
+  card.style.left = `${clamp(left, margin, window.innerWidth - cardRect.width - margin)}px`;
+  card.style.top = `${clamp(top, margin, window.innerHeight - cardRect.height - margin)}px`;
+}
+
+function renderOnboardingStep() {
+  const layer = $('#onboardingLayer');
+  if (!layer) return;
+  const step = onboardingSteps[onboardingStepIndex];
+  const target = document.querySelector(step.selector);
+  clearOnboardingFocus();
+  if (target) {
+    target.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
+  }
+  $('#onboardingTitle').textContent = step.title;
+  $('#onboardingText').textContent = step.text;
+  $('#onboardingProgress').innerHTML = onboardingSteps.map((_, i) => `<span class="${i <= onboardingStepIndex ? 'active' : ''}"></span>`).join('');
+  $('#onboardingNextBtn').textContent = onboardingStepIndex === onboardingSteps.length - 1 ? 'Abschließen' : 'Weiter';
+  setTimeout(() => positionOnboardingCard(target || document.body), 120);
+}
+
+function startOnboarding() {
+  if (!me.authenticated || !me.needs_onboarding) return;
+  onboardingStepIndex = 0;
+  workspaceCollapsed = false;
+  workspaceOpen = true;
+  updateWorkspaceShell();
+  $('#onboardingLayer')?.classList.remove('hidden');
+  renderOnboardingStep();
+}
+
+async function finishOnboarding(dismissed = false) {
+  $('#onboardingLayer')?.classList.add('hidden');
+  clearOnboardingFocus();
+  me.needs_onboarding = false;
+  try {
+    await api('/api/onboarding/complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dismissed })
+    });
+  } catch (e) {
+    showError(e, 'Onboarding konnte nicht gespeichert werden');
+  }
+}
+
+function nextOnboardingStep() {
+  if (onboardingStepIndex >= onboardingSteps.length - 1) {
+    finishOnboarding(false);
+    return;
+  }
+  onboardingStepIndex += 1;
+  renderOnboardingStep();
 }
 
 async function loadProjects() {
@@ -1421,6 +1554,7 @@ async function register() {
     await refreshMe();
     await loadChats();
     toast('Konto erstellt');
+    startOnboarding();
   } catch (e) {
     showError(e, 'Registrierung fehlgeschlagen');
   }
@@ -1728,6 +1862,8 @@ function bindEvents() {
   $('#loginBtn').onclick = login;
   $('#registerBtn').onclick = register;
   $('#logoutBtn').onclick = logout;
+  $('#onboardingNextBtn').onclick = nextOnboardingStep;
+  $('#onboardingSkipBtn').onclick = () => finishOnboarding(true);
   $('#setup2faBtn').onclick = setup2fa;
   $('#enable2faBtn').onclick = enable2fa;
   $('#disable2faBtn').onclick = disable2fa;
@@ -1738,6 +1874,8 @@ function bindEvents() {
       contextDrawer.classList.add('hidden');
       $('#settingsModal').classList.add('hidden');
       $('#loginModal').classList.add('hidden');
+      $('#onboardingLayer')?.classList.add('hidden');
+      clearOnboardingFocus();
       workspaceOpen = false;
       updateWorkspaceShell();
       closeSidebar();
@@ -1760,6 +1898,7 @@ async function boot() {
   if (me.authenticated) {
     if (me.role === 'admin') await loadSettings();
     await loadChats();
+    startOnboarding();
   }
   input.focus();
 }
