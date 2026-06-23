@@ -17,6 +17,7 @@
     <button class="nav-pill active" id="homeBtn"><span data-icon="circle"></span><span>Home</span></button>
     <button class="nav-pill" id="searchBtn" type="button"><span data-icon="search"></span><span>Search</span></button>
     <button class="nav-pill" id="projectsBtn"><span data-icon="briefcase"></span><span>Projects</span></button>
+    <button class="nav-pill" id="memoryBtn" type="button"><span data-icon="brain"></span><span>Memory</span></button>
     <button class="nav-pill" id="archiveBtn"><span data-icon="archive"></span><span>Archiv</span></button>
     <div class="section-title" id="sectionTitle">Aktuelle</div>
     <div class="chat-list" id="chatList"></div>
@@ -32,6 +33,7 @@
       <button class="model-pill" id="activeModeLabel" type="button" aria-haspopup="dialog" aria-expanded="false"><span>Holo Rick</span><small>Auto</small><i data-icon="chevron-down"></i></button>
       <div class="top-actions">
         <button class="share-btn" type="button">Gemeinsam nutzen</button>
+        <button class="icon-btn mobile-only" id="openWorkspaceBtn" title="Workspace" data-icon="layout-panel-right"></button>
         <button class="icon-btn" id="contextBtn" title="Projektkontext" data-icon="file-text"></button>
         <button class="icon-btn" id="retitleBtn" title="Titel neu generieren" data-icon="sparkles"></button>
         <button class="icon-btn" id="settingsBtn" title="Einstellungen" data-icon="more-horizontal"></button>
@@ -83,6 +85,27 @@
     </form>
     <div class="hint">Holo Rick kann falschliegen. Prüf Wichtiges selbst, bevor du die Realität umbaust.</div>
   </main>
+  <aside class="workspace-panel" id="workspacePanel" aria-label="Workspace">
+    <div class="workspace-head">
+      <div>
+        <strong>Workspace</strong>
+        <small id="workspaceSubtitle">Artifacts, Quellen, Tasks</small>
+      </div>
+      <div class="workspace-head-actions">
+        <button class="icon-btn mobile-only" id="closeWorkspaceBtn" title="Workspace schließen" data-icon="x"></button>
+        <button class="icon-btn desktop-only" id="collapseWorkspaceBtn" title="Workspace einklappen" data-icon="layout-panel-right"></button>
+      </div>
+    </div>
+    <nav class="workspace-tabs" id="workspaceTabs">
+      <button class="active" data-tab="answer" type="button">Antwort</button>
+      <button data-tab="files" type="button">Dateien</button>
+      <button data-tab="preview" type="button">Vorschau</button>
+      <button data-tab="console" type="button">Konsole</button>
+      <button data-tab="tasks" type="button">Tasks</button>
+      <button data-tab="sources" type="button">Quellen</button>
+    </nav>
+    <section class="workspace-body" id="workspaceBody"></section>
+  </aside>
 </div>
 
 <div class="modal auth-modal hidden" id="loginModal">
