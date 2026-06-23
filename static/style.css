@@ -1799,3 +1799,77 @@ button { color: inherit; }
 .project-delete:hover { background: rgba(248,113,113,.14); color: #fecaca; }
 .project-delete svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .share-card { max-width: 560px; }
+
+.auth-page {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  overflow: auto;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(255,255,255,.08), transparent 28%),
+    linear-gradient(135deg, #111 0%, #171717 52%, #0d0d0d 100%);
+}
+.auth-page.hidden { display: none; }
+.auth-page .auth-stage { margin: 0; }
+.auth-page .auth-card { box-shadow: 0 30px 100px rgba(0,0,0,.62); }
+.auth-page .modal-close { position: absolute; }
+
+.onboarding-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  pointer-events: none;
+}
+.onboarding-layer.hidden { display: none; }
+.onboarding-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,.34);
+  backdrop-filter: blur(2px);
+}
+.onboarding-focus {
+  position: relative;
+  z-index: 71 !important;
+  outline: 2px solid rgba(238,238,238,.92);
+  outline-offset: 6px;
+  box-shadow: 0 0 0 9999px rgba(0,0,0,.28), 0 18px 70px rgba(0,0,0,.48);
+  border-radius: 16px;
+}
+.onboarding-card {
+  position: absolute;
+  z-index: 72;
+  width: min(360px, calc(100vw - 28px));
+  background: #202020;
+  border: 1px solid #3b3b3b;
+  border-radius: 18px;
+  padding: 18px;
+  box-shadow: 0 26px 80px rgba(0,0,0,.58);
+  pointer-events: auto;
+}
+.onboarding-kicker {
+  color: #a8a8a8;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin-bottom: 8px;
+}
+.onboarding-card h2 { margin: 0 0 8px; font-size: 20px; }
+.onboarding-card p { margin: 0; color: #cfcfcf; line-height: 1.5; }
+.onboarding-progress { display: flex; gap: 6px; margin: 16px 0; }
+.onboarding-progress span {
+  height: 4px;
+  flex: 1;
+  border-radius: 99px;
+  background: #444;
+}
+.onboarding-progress span.active { background: #eeeeee; }
+.onboarding-actions { display: flex; justify-content: flex-end; gap: 10px; }
+
+@media (max-width: 760px) {
+  .auth-page { padding: 0; }
+  .onboarding-card { left: 14px !important; right: 14px; top: auto !important; bottom: 18px; width: auto; }
+}

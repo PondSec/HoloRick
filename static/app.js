@@ -42,6 +42,7 @@ let selectedMetadata = null;
 let memoryItems = [];
 let memoryFilters = { q: '', scope: 'all', archived: false };
 let editingMemoryId = '';
+let onboardingStepIndex = 0;
 const guestTokenKey = 'holo_rick_guest_token';
 
 const modeLabels = {
@@ -701,6 +702,95 @@ async function refreshMe() {
     : `${me.public_messages_used || 0}/${me.public_message_limit || 3} frei`;
   const limited = me.public_limit_reached || me.public_attachment_limit_reached;
   limitBanner.classList.toggle('hidden', !limited);
+}
+
+
+const onboardingSteps = [
+  {
+    selector: '[data-tour="chat"]',
+    title: 'Chat: dein ruhiger Startpunkt',
+    text: 'Stelle Fragen, hänge Dateien an und arbeite Schritt für Schritt weiter. Alles bleibt in deinem Konto wiederauffindbar.'
+  },
+  {
+    selector: '[data-tour="memory"]',
+    title: 'Memory: wichtige Dinge bleiben präsent',
+    text: 'Lege dauerhafte Notizen, Präferenzen und Projektdetails ab, damit Holo Rick weniger raten muss und hilfreicher antwortet.'
+  },
+  {
+    selector: '[data-tour="workspace"]',
+    title: 'Workspace: Ergebnisse sauber ordnen',
+    text: 'Hier findest du Antworten, Dateien, Quellen, Tasks und Artefakte getrennt vom Chat – professioneller Kontext statt Fenster-Chaos.'
+  }
+];
+
+function clearOnboardingFocus() {
+  document.querySelectorAll('.onboarding-focus').forEach(el => el.classList.remove('onboarding-focus'));
+}
+
+function positionOnboardingCard(target) {
+  const card = $('#onboardingCard');
+  if (!card || !target) return;
+  const rect = target.getBoundingClientRect();
+  const cardRect = card.getBoundingClientRect();
+  const gap = 18;
+  let left = rect.right + gap;
+  let top = Math.max(14, rect.top);
+  if (left + cardRect.width > window.innerWidth - 14) left = Math.max(14, rect.left - cardRect.width - gap);
+  if (left < 14) left = Math.max(14, Math.min(window.innerWidth - cardRect.width - 14, rect.left));
+  if (top + cardRect.height > window.innerHeight - 14) top = Math.max(14, window.innerHeight - cardRect.height - 14);
+  card.style.left = `${left}px`;
+  card.style.top = `${top}px`;
+}
+
+function renderOnboardingStep() {
+  const layer = $('#onboardingLayer');
+  if (!layer) return;
+  const step = onboardingSteps[onboardingStepIndex];
+  const target = document.querySelector(step.selector);
+  clearOnboardingFocus();
+  if (target) {
+    target.classList.add('onboarding-focus');
+    target.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
+  }
+  $('#onboardingTitle').textContent = step.title;
+  $('#onboardingText').textContent = step.text;
+  $('#onboardingProgress').innerHTML = onboardingSteps.map((_, i) => `<span class="${i <= onboardingStepIndex ? 'active' : ''}"></span>`).join('');
+  $('#onboardingNextBtn').textContent = onboardingStepIndex === onboardingSteps.length - 1 ? 'Abschließen' : 'Weiter';
+  setTimeout(() => positionOnboardingCard(target || document.body), 120);
+}
+
+function startOnboarding() {
+  if (!me.authenticated || !me.needs_onboarding) return;
+  onboardingStepIndex = 0;
+  workspaceCollapsed = false;
+  workspaceOpen = true;
+  updateWorkspaceShell();
+  $('#onboardingLayer')?.classList.remove('hidden');
+  renderOnboardingStep();
+}
+
+async function finishOnboarding(dismissed = false) {
+  $('#onboardingLayer')?.classList.add('hidden');
+  clearOnboardingFocus();
+  me.needs_onboarding = false;
+  try {
+    await api('/api/onboarding/complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dismissed })
+    });
+  } catch (e) {
+    showError(e, 'Onboarding konnte nicht gespeichert werden');
+  }
+}
+
+function nextOnboardingStep() {
+  if (onboardingStepIndex >= onboardingSteps.length - 1) {
+    finishOnboarding(false);
+    return;
+  }
+  onboardingStepIndex += 1;
+  renderOnboardingStep();
 }
 
 async function loadProjects() {
@@ -1421,6 +1511,7 @@ async function register() {
     await refreshMe();
     await loadChats();
     toast('Konto erstellt');
+    startOnboarding();
   } catch (e) {
     showError(e, 'Registrierung fehlgeschlagen');
   }
@@ -1728,6 +1819,8 @@ function bindEvents() {
   $('#loginBtn').onclick = login;
   $('#registerBtn').onclick = register;
   $('#logoutBtn').onclick = logout;
+  $('#onboardingNextBtn').onclick = nextOnboardingStep;
+  $('#onboardingSkipBtn').onclick = () => finishOnboarding(true);
   $('#setup2faBtn').onclick = setup2fa;
   $('#enable2faBtn').onclick = enable2fa;
   $('#disable2faBtn').onclick = disable2fa;
@@ -1738,6 +1831,8 @@ function bindEvents() {
       contextDrawer.classList.add('hidden');
       $('#settingsModal').classList.add('hidden');
       $('#loginModal').classList.add('hidden');
+      $('#onboardingLayer')?.classList.add('hidden');
+      clearOnboardingFocus();
       workspaceOpen = false;
       updateWorkspaceShell();
       closeSidebar();
@@ -1760,6 +1855,7 @@ async function boot() {
   if (me.authenticated) {
     if (me.role === 'admin') await loadSettings();
     await loadChats();
+    startOnboarding();
   }
   input.focus();
 }
