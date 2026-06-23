@@ -724,22 +724,66 @@ const onboardingSteps = [
 ];
 
 function clearOnboardingFocus() {
-  document.querySelectorAll('.onboarding-focus').forEach(el => el.classList.remove('onboarding-focus'));
+  const spotlight = $('#onboardingSpotlight');
+  if (spotlight) spotlight.classList.add('hidden');
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function placeOnboardingSpotlight(target) {
+  const spotlight = $('#onboardingSpotlight');
+  if (!spotlight || !target) return null;
+  const rect = target.getBoundingClientRect();
+  const pad = 8;
+  const box = {
+    left: clamp(rect.left - pad, 10, window.innerWidth - 20),
+    top: clamp(rect.top - pad, 10, window.innerHeight - 20),
+    width: Math.min(rect.width + pad * 2, window.innerWidth - 20),
+    height: Math.min(rect.height + pad * 2, window.innerHeight - 20)
+  };
+  spotlight.style.left = `${box.left}px`;
+  spotlight.style.top = `${box.top}px`;
+  spotlight.style.width = `${box.width}px`;
+  spotlight.style.height = `${box.height}px`;
+  spotlight.classList.remove('hidden');
+  return box;
 }
 
 function positionOnboardingCard(target) {
   const card = $('#onboardingCard');
   if (!card || !target) return;
-  const rect = target.getBoundingClientRect();
+  const box = placeOnboardingSpotlight(target) || target.getBoundingClientRect();
   const cardRect = card.getBoundingClientRect();
   const gap = 18;
-  let left = rect.right + gap;
-  let top = Math.max(14, rect.top);
-  if (left + cardRect.width > window.innerWidth - 14) left = Math.max(14, rect.left - cardRect.width - gap);
-  if (left < 14) left = Math.max(14, Math.min(window.innerWidth - cardRect.width - 14, rect.left));
-  if (top + cardRect.height > window.innerHeight - 14) top = Math.max(14, window.innerHeight - cardRect.height - 14);
-  card.style.left = `${left}px`;
-  card.style.top = `${top}px`;
+  const margin = 16;
+  const spaces = {
+    right: window.innerWidth - (box.left + box.width),
+    left: box.left,
+    bottom: window.innerHeight - (box.top + box.height),
+    top: box.top
+  };
+  let left;
+  let top;
+  if (spaces.top >= cardRect.height + gap) {
+    left = box.left + box.width / 2 - cardRect.width / 2;
+    top = box.top - cardRect.height - gap;
+  } else if (spaces.bottom >= cardRect.height + gap) {
+    left = box.left + box.width / 2 - cardRect.width / 2;
+    top = box.top + box.height + gap;
+  } else if (spaces.right >= cardRect.width + gap) {
+    left = box.left + box.width + gap;
+    top = box.top + box.height / 2 - cardRect.height / 2;
+  } else if (spaces.left >= cardRect.width + gap) {
+    left = box.left - cardRect.width - gap;
+    top = box.top + box.height / 2 - cardRect.height / 2;
+  } else {
+    left = window.innerWidth - cardRect.width - margin;
+    top = margin;
+  }
+  card.style.left = `${clamp(left, margin, window.innerWidth - cardRect.width - margin)}px`;
+  card.style.top = `${clamp(top, margin, window.innerHeight - cardRect.height - margin)}px`;
 }
 
 function renderOnboardingStep() {
@@ -749,7 +793,6 @@ function renderOnboardingStep() {
   const target = document.querySelector(step.selector);
   clearOnboardingFocus();
   if (target) {
-    target.classList.add('onboarding-focus');
     target.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
   }
   $('#onboardingTitle').textContent = step.title;

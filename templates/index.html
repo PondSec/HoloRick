@@ -74,7 +74,7 @@
       </div>
     </div>
     <div class="rate-banner hidden" id="rateBanner"></div>
-    <form class="composer" id="composerForm">
+    <form class="composer" id="composerForm" data-tour="chat">
       <input type="file" id="fileInput" multiple hidden accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.md,.py,.js,.ts,.html,.css,.json,.yml,.yaml,.toml,.log,.csv,image/*">
       <button type="button" class="attach-btn" id="attachBtn" title="Dateien anhängen" data-icon="plus"></button>
       <div class="composer-main">
@@ -152,6 +152,7 @@
 
 <div class="onboarding-layer hidden" id="onboardingLayer" aria-live="polite">
   <div class="onboarding-backdrop"></div>
+  <div class="onboarding-spotlight" id="onboardingSpotlight"></div>
   <div class="onboarding-card" id="onboardingCard">
     <div class="onboarding-kicker">Kurze Einführung</div>
     <h2 id="onboardingTitle">Willkommen</h2>
