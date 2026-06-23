@@ -102,6 +102,7 @@ const icons = {
   'file-text': '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>',
   'brain': '<svg viewBox="0 0 24 24"><path d="M9 3a3 3 0 0 0-3 3v1a3 3 0 0 0-2 5.2A3.5 3.5 0 0 0 7.5 19H9V3Z"/><path d="M15 3a3 3 0 0 1 3 3v1a3 3 0 0 1 2 5.2A3.5 3.5 0 0 1 16.5 19H15V3Z"/><path d="M9 8H7.5M15 8h1.5M9 14H7.5M15 14h1.5"/></svg>',
   'layout-panel-right': '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/><path d="m10 9-3 3 3 3"/></svg>',
+  'workspace-expand': '<svg viewBox="0 0 24 24"><path d="M20 4v16"/><path d="M4 12h12"/><path d="m10 6-6 6 6 6"/></svg>',
   'key-round': '<svg viewBox="0 0 24 24"><path d="M2 18v3h3l9.2-9.2"/><circle cx="16.5" cy="7.5" r="5.5"/></svg>',
   'smartphone': '<svg viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>',
   'copy': '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><rect x="2" y="2" width="13" height="13" rx="2"/></svg>',
@@ -344,6 +345,12 @@ function updateWorkspaceShell() {
   document.body.classList.toggle('workspace-collapsed', workspaceCollapsed);
   document.body.classList.toggle('workspace-open', workspaceOpen);
   $('#workspaceTabs')?.querySelectorAll('button').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === workspaceTab));
+  const collapseBtn = $('#collapseWorkspaceBtn');
+  if (collapseBtn) {
+    collapseBtn.innerHTML = workspaceCollapsed ? icons['workspace-expand'] : icons['layout-panel-right'];
+    collapseBtn.title = workspaceCollapsed ? 'Workspace ausklappen' : 'Workspace einklappen';
+    collapseBtn.setAttribute('aria-label', collapseBtn.title);
+  }
 }
 
 function setWorkspaceTab(tab, open = true) {
