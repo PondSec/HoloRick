@@ -255,9 +255,34 @@ button { color: inherit; }
   z-index: 12;
 }
 .workspace-panel.collapsed {
-  width: 28px;
-  min-width: 28px;
-  overflow: hidden;
+  width: 48px;
+  min-width: 48px;
+  overflow: visible;
+  background: transparent;
+}
+.workspace-panel.collapsed .workspace-head {
+  height: 100%;
+  padding: 0 4px;
+  justify-content: center;
+  border-bottom: 0;
+}
+.workspace-panel.collapsed .workspace-head-actions {
+  width: 40px;
+  justify-content: center;
+}
+.workspace-panel.collapsed #collapseWorkspaceBtn {
+  width: 40px;
+  height: 54px;
+  border: 1px solid rgba(255,255,255,.18);
+  border-right: 0;
+  border-radius: 14px 0 0 14px;
+  background: #1f1f24;
+  color: #fff;
+  box-shadow: -10px 0 28px rgba(0,0,0,.35);
+}
+.workspace-panel.collapsed #collapseWorkspaceBtn:hover {
+  background: #2d2d33;
+  transform: translateX(-3px);
 }
 .workspace-panel.collapsed .workspace-head {
   padding: 0;
