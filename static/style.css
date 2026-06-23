@@ -284,6 +284,11 @@ button { color: inherit; }
   background: #2d2d33;
   transform: translateX(-3px);
 }
+.workspace-panel.collapsed .workspace-head {
+  padding: 0;
+  justify-content: flex-end;
+}
+.workspace-panel.collapsed .workspace-head-actions { transform: translateX(18px); }
 .workspace-panel.collapsed .workspace-tabs,
 .workspace-panel.collapsed .workspace-body,
 .workspace-panel.collapsed .workspace-head strong,
