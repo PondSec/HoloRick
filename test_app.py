@@ -230,3 +230,140 @@ def test_markdown_does_not_autolink_filenames_but_keeps_urls():
     assert "server.py" in filename_html
     assert "<a" in url_html
     assert "text-decoration" not in url_html
+
+
+def test_send_creates_artifact_metadata_and_uses_one_llm_call(monkeypatch):
+    calls = {"count": 0}
+
+    def fake_llm(messages, **kwargs):
+        calls["count"] += 1
+        return "Hier ist dein Artifact:\n\n```python app.py\nprint('holo')\n```"
+
+    monkeypatch.setattr(holo, "call_llm", fake_llm)
+    client = holo.app.test_client()
+    headers = register_user(client, "artifact-meta@example.com")
+
+    project = client.post("/api/projects", json={"name": "Artifact Projekt", "description": ""}, headers=headers)
+    project_id = project.get_json()["id"]
+    response = client.post(
+        "/api/send",
+        data={"message": "Erstelle ein Code Artifact", "chat_id": "0", "project_id": str(project_id)},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert calls["count"] == 1
+    artifacts = body["assistant_message"]["artifacts"]
+    assert artifacts
+    assert artifacts[0]["type"] == "code"
+    assert artifacts[0]["language"] == "python"
+    metadata = body["assistant_message"]["answer_metadata"]
+    assert metadata["work_summary"]
+    assert any(source["type"] == "artifact" for source in metadata["sources"])
+
+
+def test_memory_crud_and_relevance_prioritizes_pinned():
+    client = holo.app.test_client()
+    email = "memory-crud@example.com"
+    headers = register_user(client, email)
+    project = client.post("/api/projects", json={"name": "Memory Projekt", "description": ""}, headers=headers)
+    project_id = project.get_json()["id"]
+    with holo.db() as con:
+        user_id = con.execute("SELECT id FROM users WHERE email=?", (email,)).fetchone()["id"]
+
+    normal = holo.create_memory_item(
+        user_id,
+        {
+            "scope": "project",
+            "project_id": project_id,
+            "title": "Normale Notiz",
+            "content": "Alpha Kontext",
+            "tags": ["alpha"],
+        },
+    )
+    pinned = holo.create_memory_item(
+        user_id,
+        {
+            "scope": "project",
+            "project_id": project_id,
+            "title": "Gepinnte Notiz",
+            "content": "Beta Kontext",
+            "tags": ["beta"],
+            "is_pinned": True,
+        },
+    )
+
+    listed = client.get(f"/api/memory?project_id={project_id}", headers=headers)
+    assert listed.status_code == 200
+    assert {item["id"] for item in listed.get_json()} >= {normal["id"], pinned["id"]}
+
+    relevant = holo.relevant_memory_items(user_id, project_id=project_id, query="Alpha", limit=2)
+    assert relevant[0]["id"] == pinned["id"]
+
+    updated = client.put(
+        f"/api/memory/{normal['id']}",
+        json={**normal, "is_archived": True, "content": "Alpha Kontext aktualisiert"},
+        headers=headers,
+    )
+    assert updated.status_code == 200
+    assert updated.get_json()["is_archived"] is True
+
+    deleted = client.delete(f"/api/memory/{normal['id']}", headers=headers)
+    assert deleted.status_code == 200
+
+
+def test_response_cache_hits_for_safe_identical_request(monkeypatch):
+    with holo.db() as con:
+        con.execute("DELETE FROM response_cache")
+        con.execute("DELETE FROM usage_events")
+        con.commit()
+
+    calls = {"count": 0}
+
+    class FakeMessage:
+        content = "cached ok"
+
+    class FakeChoice:
+        message = FakeMessage()
+
+    class FakeCompletion:
+        choices = [FakeChoice()]
+
+    def fake_completion(**kwargs):
+        calls["count"] += 1
+        return FakeCompletion()
+
+    monkeypatch.setattr(holo.groq_key_pool, "chat_completion_create", fake_completion)
+    messages = [
+        {"role": "system", "content": "Du bist kurz."},
+        {"role": "user", "content": "Fasse diesen stabilen Text kurz zusammen."},
+    ]
+
+    first = holo.call_llm(messages, temperature=0.2, max_tokens=200, route="summarize", context_meta={"chat_id": None})
+    second = holo.call_llm(messages, temperature=0.2, max_tokens=200, route="summarize", context_meta={"chat_id": None})
+
+    assert first == "cached ok"
+    assert second == "cached ok"
+    assert calls["count"] == 1
+    with holo.db() as con:
+        hit = con.execute("SELECT COUNT(*) AS c FROM usage_events WHERE cache_status='hit'").fetchone()
+    assert hit["c"] >= 1
+
+
+def test_metadata_fallback_for_old_message_without_metadata(monkeypatch):
+    monkeypatch.setattr(holo, "call_llm", lambda messages, **kwargs: "alte antwort")
+    client = holo.app.test_client()
+    headers = register_user(client, "metadata-fallback@example.com")
+    sent = client.post("/api/send", data={"message": "Hallo", "chat_id": "0"}, headers=headers)
+    chat_id = sent.get_json()["chat_id"]
+    message_id = sent.get_json()["assistant_message"]["id"]
+    with holo.db() as con:
+        con.execute("DELETE FROM answer_metadata WHERE message_id=?", (message_id,))
+        con.commit()
+
+    fallback = client.get(f"/api/messages/{message_id}/metadata", headers=headers)
+    assert fallback.status_code == 200
+    body = fallback.get_json()
+    assert body["missing"] is True
+    assert body["sources"] == []

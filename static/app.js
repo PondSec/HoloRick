@@ -12,12 +12,15 @@ const fileInput = $('#fileInput');
 const attachmentsEl = $('#attachments');
 const modePopover = $('#modePopover');
 const contextDrawer = $('#contextDrawer');
+const workspacePanel = $('#workspacePanel');
+const workspaceBody = $('#workspaceBody');
 
 let chats = [];
 let currentChatId = 0;
 let currentProjectId = 0;
 let projects = [];
 let currentProject = null;
+let currentProjectMemory = [];
 let archivedView = false;
 let me = { authenticated: false };
 let selectedFiles = [];
@@ -29,6 +32,16 @@ let responseFormat = 'auto';
 let currentChatHasContext = false;
 let currentShareToken = '';
 let currentSharedChat = false;
+let workspaceTab = localStorage.getItem('holo_rick_workspace_tab') || 'answer';
+let workspaceCollapsed = localStorage.getItem('holo_rick_workspace_collapsed') === 'true';
+let workspaceOpen = false;
+let currentArtifacts = [];
+let selectedArtifactId = '';
+let selectedAnswer = null;
+let selectedMetadata = null;
+let memoryItems = [];
+let memoryFilters = { q: '', scope: 'all', archived: false };
+let editingMemoryId = '';
 const guestTokenKey = 'holo_rick_guest_token';
 
 const modeLabels = {
@@ -86,6 +99,8 @@ const icons = {
   'shield-check': '<svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-5"/></svg>',
   'sliders': '<svg viewBox="0 0 24 24"><path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M2 14h4"/><path d="M10 8h4"/><path d="M18 16h4"/></svg>',
   'file-text': '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>',
+  'brain': '<svg viewBox="0 0 24 24"><path d="M9 3a3 3 0 0 0-3 3v1a3 3 0 0 0-2 5.2A3.5 3.5 0 0 0 7.5 19H9V3Z"/><path d="M15 3a3 3 0 0 1 3 3v1a3 3 0 0 1 2 5.2A3.5 3.5 0 0 1 16.5 19H15V3Z"/><path d="M9 8H7.5M15 8h1.5M9 14H7.5M15 14h1.5"/></svg>',
+  'layout-panel-right': '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/><path d="m10 9-3 3 3 3"/></svg>',
   'key-round': '<svg viewBox="0 0 24 24"><path d="M2 18v3h3l9.2-9.2"/><circle cx="16.5" cy="7.5" r="5.5"/></svg>',
   'smartphone': '<svg viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>',
   'copy': '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><rect x="2" y="2" width="13" height="13" rx="2"/></svg>',
@@ -314,6 +329,227 @@ function parseMeta(meta = {}) {
   return meta || {};
 }
 
+function artifactLabel(artifact = {}) {
+  const lang = artifact.language ? ` · ${artifact.language}` : '';
+  return `${artifact.type || 'text'}${lang} · v${artifact.version || 1}`;
+}
+
+function updateWorkspaceShell() {
+  workspacePanel?.classList.toggle('collapsed', workspaceCollapsed);
+  workspacePanel?.classList.toggle('open', workspaceOpen);
+  document.body.classList.toggle('workspace-collapsed', workspaceCollapsed);
+  document.body.classList.toggle('workspace-open', workspaceOpen);
+  $('#workspaceTabs')?.querySelectorAll('button').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === workspaceTab));
+}
+
+function setWorkspaceTab(tab, open = true) {
+  workspaceTab = tab || 'answer';
+  localStorage.setItem('holo_rick_workspace_tab', workspaceTab);
+  if (open) {
+    workspaceCollapsed = false;
+    workspaceOpen = true;
+    localStorage.setItem('holo_rick_workspace_collapsed', 'false');
+  }
+  renderWorkspace();
+}
+
+function selectedArtifact() {
+  if (!selectedArtifactId && currentArtifacts.length) selectedArtifactId = currentArtifacts[0].id;
+  return currentArtifacts.find(a => a.id === selectedArtifactId) || currentArtifacts[0] || null;
+}
+
+function mergeArtifacts(artifacts = []) {
+  const byId = new Map(currentArtifacts.map(a => [a.id, a]));
+  artifacts.forEach(artifact => {
+    if (artifact?.id) byId.set(artifact.id, { ...(byId.get(artifact.id) || {}), ...artifact });
+  });
+  currentArtifacts = Array.from(byId.values()).sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')));
+  if (!selectedArtifactId && currentArtifacts[0]) selectedArtifactId = currentArtifacts[0].id;
+}
+
+function collectArtifactsFromMessages(list = []) {
+  currentArtifacts = [];
+  selectedArtifactId = '';
+  (list || []).forEach(message => mergeArtifacts((message.artifacts || []).map(a => ({ ...a, message_id: message.id }))));
+}
+
+function workspaceEmpty() {
+  return `<div class="workspace-empty"><strong>Noch kein Artifact.</strong><p>Wenn Holo Rick Dateien, Code, Tabellen oder Vorschauen erzeugt, erscheinen sie hier.</p></div>`;
+}
+
+function renderAnswerTab() {
+  if (!selectedAnswer) return workspaceEmpty();
+  const meta = parseMeta(selectedAnswer.meta);
+  const usage = meta.efficiency || {};
+  const stats = usage.model ? `
+    <div class="usage-grid">
+      <span>Modell</span><strong>${esc(usage.model)}</strong>
+      <span>Cache</span><strong>${esc(usage.cache_status || 'n/a')}</strong>
+      <span>Input</span><strong>${esc(usage.input_tokens || 0)} Token</strong>
+      <span>Output</span><strong>${esc(usage.output_tokens || 0)} Token</strong>
+    </div>` : '<p class="muted">Für diese Antwort sind keine Token-Metriken gespeichert.</p>';
+  return `
+    <div class="workspace-section">
+      <h3>Aktuelle Antwort</h3>
+      <div class="workspace-answer">${selectedAnswer.content_html || plainTextToHtml(selectedAnswer.content || '')}</div>
+      ${stats}
+    </div>`;
+}
+
+function renderFilesTab() {
+  if (!currentArtifacts.length) return workspaceEmpty();
+  const artifact = selectedArtifact();
+  const rows = currentArtifacts.map(item => `
+    <button class="artifact-row ${item.id === artifact?.id ? 'active' : ''}" data-id="${esc(item.id)}" type="button">
+      <strong>${esc(item.title || 'Artifact')}</strong>
+      <small>${esc(artifactLabel(item))}</small>
+    </button>`).join('');
+  const editable = artifact && !['file/export'].includes(artifact.type);
+  const content = artifact ? esc(artifact.content || '') : '';
+  const versions = (artifact?.versions || [{ version: artifact?.version || 1, created_at: artifact?.updated_at, title: artifact?.title }]).map(v => `
+    <div class="version-row"><strong>v${esc(v.version)}</strong><span>${esc(v.title || artifact?.title || 'Artifact')}</span><small>${v.created_at ? new Date(v.created_at).toLocaleString('de-DE') : ''}</small></div>`).join('');
+  return `
+    <div class="artifact-layout">
+      <div class="artifact-list">${rows}</div>
+      <div class="artifact-detail">
+        ${artifact ? `
+          <div class="artifact-detail-head">
+            <div><h3>${esc(artifact.title || 'Artifact')}</h3><small>${esc(artifactLabel(artifact))}</small></div>
+            <div class="artifact-tools">
+              <button class="ghost mini-action" id="copyArtifactBtn" type="button">Kopieren</button>
+              <button class="ghost mini-action" id="downloadArtifactBtn" type="button">Download</button>
+              ${editable ? '<button class="primary mini-action" id="saveArtifactBtn" type="button">Speichern</button>' : ''}
+              <button class="ghost mini-action danger-text" id="deleteArtifactBtn" type="button">Löschen</button>
+            </div>
+          </div>
+          ${editable ? `<textarea class="artifact-editor" id="artifactEditor">${content}</textarea>` : `<pre class="artifact-pre">${content}</pre>`}
+          <div class="artifact-versions"><h4>Versionen</h4>${versions}</div>
+        ` : workspaceEmpty()}
+      </div>
+    </div>`;
+}
+
+function renderPreviewTab() {
+  const artifact = selectedArtifact();
+  if (!artifact) return workspaceEmpty();
+  if (artifact.type === 'html') {
+    return `<iframe class="artifact-preview" sandbox="allow-forms allow-popups" srcdoc="${esc(artifact.content || '')}"></iframe>`;
+  }
+  if (artifact.type === 'json') {
+    let formatted = artifact.content || '';
+    try { formatted = JSON.stringify(JSON.parse(formatted), null, 2); } catch {}
+    return `<pre class="artifact-pre">${esc(formatted)}</pre>`;
+  }
+  if (artifact.type === 'markdown' || artifact.type === 'table/csv') {
+    return `<pre class="artifact-pre">${esc(artifact.content || '')}</pre>`;
+  }
+  return `<div class="workspace-empty"><strong>Keine Vorschau für diesen Typ.</strong><p>Nutze den Dateien-Tab zum Anzeigen und Bearbeiten.</p></div>`;
+}
+
+function renderConsoleTab() {
+  const logs = currentArtifacts.filter(a => a.type === 'log/result');
+  if (!logs.length) {
+    return `<div class="workspace-empty"><strong>Noch keine Konsolenläufe.</strong><p>Agent-Logs und Resultate werden hier sichtbar, sobald Holo Rick Läufe speichert.</p></div>`;
+  }
+  return logs.map(log => `<div class="log-card"><strong>${esc(log.title)}</strong><pre>${esc(log.content || '')}</pre></div>`).join('');
+}
+
+function renderTasksTab() {
+  const tasks = parseMeta(selectedAnswer?.meta).tasks || [];
+  if (!tasks.length) {
+    return `<div class="workspace-empty"><strong>Keine Tasks.</strong><p>Vorbereitete Agent-Status: pending, running, success, failed, cancelled.</p></div>`;
+  }
+  return tasks.map(task => `<div class="task-row ${esc(task.status || 'pending')}"><strong>${esc(task.title || task.label || 'Task')}</strong><span>${esc(task.status || 'pending')}</span></div>`).join('');
+}
+
+function renderSourcesTab() {
+  const md = selectedMetadata || selectedAnswer?.answer_metadata || {};
+  const sources = md.sources || [];
+  const work = md.work_summary || [];
+  const uncertainties = md.uncertainties || [];
+  const checked = md.checked_items || [];
+  const sourceHtml = sources.length
+    ? sources.map(s => `<div class="source-row"><strong>${esc(s.title || 'Quelle')}</strong><span>${esc(s.type || 'manual')}</span>${s.excerpt ? `<p>${esc(s.excerpt)}</p>` : ''}</div>`).join('')
+    : '<p class="muted">Für diese Antwort wurden keine Quellen gespeichert.</p>';
+  const workHtml = work.length
+    ? work.map(w => `<div class="work-row ${esc(w.status || 'done')}"><strong>${esc(w.label || 'Schritt')}</strong><span>${esc(w.status || 'done')}</span>${w.detail ? `<p>${esc(w.detail)}</p>` : ''}</div>`).join('')
+    : '<p class="muted">Kein Arbeitsnachweis vorhanden.</p>';
+  return `
+    <div class="workspace-section">
+      <h3>Quellen</h3>${sourceHtml}
+      <h3>Arbeitsnachweis</h3>${workHtml}
+      <h3>Unsicherheit</h3>
+      <div class="confidence ${esc(md.confidence || 'medium')}">${esc(md.confidence || 'medium')}</div>
+      ${uncertainties.length ? `<ul class="plain-list">${uncertainties.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '<p class="muted">Keine Unsicherheiten gespeichert.</p>'}
+      <h3>Kontext</h3>
+      ${checked.length ? `<ul class="plain-list">${checked.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '<p class="muted">Kein geprüfter Kontext gespeichert.</p>'}
+    </div>`;
+}
+
+function renderWorkspace() {
+  if (!workspaceBody) return;
+  updateWorkspaceShell();
+  const renderers = {
+    answer: renderAnswerTab,
+    files: renderFilesTab,
+    preview: renderPreviewTab,
+    console: renderConsoleTab,
+    tasks: renderTasksTab,
+    sources: renderSourcesTab
+  };
+  workspaceBody.innerHTML = (renderers[workspaceTab] || renderAnswerTab)();
+  enhanceContent(workspaceBody);
+  bindWorkspaceContent();
+}
+
+function bindWorkspaceContent() {
+  workspaceBody?.querySelectorAll('.artifact-row').forEach(btn => {
+    btn.onclick = () => {
+      selectedArtifactId = btn.dataset.id || '';
+      renderWorkspace();
+    };
+  });
+  $('#copyArtifactBtn')?.addEventListener('click', () => {
+    const artifact = selectedArtifact();
+    if (!artifact) return;
+    navigator.clipboard.writeText(artifact.content || '').then(() => toast('Artifact kopiert'));
+  });
+  $('#downloadArtifactBtn')?.addEventListener('click', () => {
+    const artifact = selectedArtifact();
+    if (!artifact) return;
+    const blob = new Blob([artifact.content || ''], { type: artifact.type === 'html' ? 'text/html' : 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(artifact.title || 'artifact').replace(/[^\w.-]+/g, '_')}.${artifact.language || (artifact.type === 'html' ? 'html' : 'txt')}`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+  $('#saveArtifactBtn')?.addEventListener('click', async () => {
+    const artifact = selectedArtifact();
+    if (!artifact) return;
+    const content = $('#artifactEditor')?.value || '';
+    const updated = await api('/api/artifacts/' + artifact.id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...artifact, content })
+    });
+    mergeArtifacts([updated]);
+    selectedArtifactId = updated.id;
+    renderWorkspace();
+    toast('Artifact gespeichert');
+  });
+  $('#deleteArtifactBtn')?.addEventListener('click', async () => {
+    const artifact = selectedArtifact();
+    if (!artifact || !confirm('Artifact wirklich löschen?')) return;
+    await api('/api/artifacts/' + artifact.id, { method: 'DELETE' });
+    currentArtifacts = currentArtifacts.filter(a => a.id !== artifact.id);
+    selectedArtifactId = currentArtifacts[0]?.id || '';
+    renderWorkspace();
+    toast('Artifact gelöscht');
+  });
+}
+
 function generatedImageMarkup(meta = {}) {
   const parsed = parseMeta(meta);
   const generation = parsed.image_generation || {};
@@ -354,15 +590,25 @@ function enhanceContent(root) {
   });
 }
 
-function addMsg(role, content, meta = {}, contentHtml = '', messageId = null) {
+function addMsg(role, content, meta = {}, contentHtml = '', messageId = null, extras = {}) {
   const row = document.createElement('div');
   row.className = `msg ${role}`;
   const avatar = role === 'assistant' ? '<div class="avatar h">H</div>' : '<div class="avatar u">Du</div>';
   const html = role === 'assistant' ? (contentHtml || plainTextToHtml(content)) : plainTextToHtml(content);
   const parsedMeta = parseMeta(meta);
   const generatedImage = role === 'assistant' ? generatedImageMarkup(parsedMeta) : '';
+  const artifacts = extras.artifacts || [];
+  const answerMetadata = extras.answer_metadata || null;
   const smartActions = role === 'assistant' && !generatedImage
     ? Object.entries(actionLabels).map(([key, label]) => `<button class="smart-action" type="button" data-action="${key}">${label}</button>`).join('')
+    : '';
+  const trustActions = role === 'assistant'
+    ? `
+      ${artifacts.length ? '<button class="artifact-open" type="button">Artifact öffnen</button>' : ''}
+      <button class="sources-open" type="button" data-panel="sources">Quellen</button>
+      <button class="work-open" type="button" data-panel="sources">Arbeitsnachweis</button>
+      <button class="uncertainty-open" type="button" data-panel="sources">Unsicherheit</button>
+      <button class="context-open" type="button" data-panel="sources">Kontext</button>`
     : '';
   row.innerHTML = `
     ${avatar}
@@ -374,6 +620,7 @@ function addMsg(role, content, meta = {}, contentHtml = '', messageId = null) {
         <button class="copy-msg" type="button">Kopieren</button>
         ${smartActions}
         ${role === 'assistant' ? '<button class="use-as-context" type="button">Weiterfragen</button>' : ''}
+        ${trustActions}
       </div>
     </div>`;
   messagesEl.appendChild(row);
@@ -387,16 +634,52 @@ function addMsg(role, content, meta = {}, contentHtml = '', messageId = null) {
   row.querySelectorAll('.smart-action').forEach(btn => {
     btn.onclick = () => runSmartAction(btn.dataset.action, messageId, content);
   });
+  if (role === 'assistant') {
+    const answerState = {
+      id: messageId,
+      content,
+      content_html: contentHtml,
+      meta: parsedMeta,
+      artifacts,
+      answer_metadata: answerMetadata
+    };
+    row.querySelector('.artifact-open')?.addEventListener('click', () => {
+      selectedAnswer = answerState;
+      selectedMetadata = answerMetadata;
+      mergeArtifacts(artifacts);
+      if (artifacts[0]) selectedArtifactId = artifacts[0].id;
+      setWorkspaceTab('files');
+    });
+    row.querySelectorAll('.sources-open,.work-open,.uncertainty-open,.context-open').forEach(btn => {
+      btn.addEventListener('click', () => {
+        selectedAnswer = answerState;
+        selectedMetadata = answerMetadata;
+        mergeArtifacts(artifacts);
+        setWorkspaceTab('sources');
+      });
+    });
+    if (!selectedAnswer) {
+      selectedAnswer = answerState;
+      selectedMetadata = answerMetadata;
+      mergeArtifacts(artifacts);
+      renderWorkspace();
+    }
+  }
   scrollBottom();
 }
 
 function renderMessages(list) {
   messagesEl.innerHTML = '';
+  selectedAnswer = null;
+  selectedMetadata = null;
+  collectArtifactsFromMessages(list || []);
   if (!list || !list.length) {
     renderEmpty();
+    renderWorkspace();
     return;
   }
-  list.forEach(m => addMsg(m.role, m.content, m.meta, m.content_html, m.id));
+  list.forEach(m => addMsg(m.role, m.content, m.meta, m.content_html, m.id, m));
+  renderWorkspace();
 }
 
 async function refreshMe() {
@@ -457,12 +740,177 @@ async function openProject(id) {
   const d = await api('/api/projects/' + id);
   currentProjectId = id;
   currentProject = d.project;
+  currentProjectMemory = d.memory || [];
+  memoryItems = currentProjectMemory;
   showChatSurface();
   setActiveNav('projectsBtn');
-  messagesEl.innerHTML = `<div class="project-home"><div class="project-title">${icons.folder}<h1>${esc(d.project.name)}</h1><button class="ghost" id="editProjectBtn" type="button">Kontext</button></div><div class="composer-preview" id="projectNewChat">+ Neuer Chat in ${esc(d.project.name)}</div><div class="project-tabs"><button class="active">Chats</button><button>Quellen</button></div><div class="project-chat-list">${d.chats.map(c => `<button class="project-chat-row" data-id="${c.id}"><span><strong>${esc(c.title)}</strong><small>Projektchat</small></span><em>${new Date(c.updated_at).toLocaleDateString('de-DE')}</em></button>`).join('') || '<div class="empty-list">Noch keine Chats im Projekt.</div>'}</div></div>`;
+  messagesEl.innerHTML = `<div class="project-home"><div class="project-title">${icons.folder}<h1>${esc(d.project.name)}</h1><button class="ghost" id="editProjectBtn" type="button">Kontext</button></div><div class="composer-preview" id="projectNewChat">+ Neuer Chat in ${esc(d.project.name)}</div><div class="project-tabs"><button class="active" id="projectChatsTab" type="button">Chats</button><button id="projectMemoryTab" type="button">Memory</button><button id="projectSourcesTab" type="button">Quellen</button></div><div class="project-chat-list">${d.chats.map(c => `<button class="project-chat-row" data-id="${c.id}"><span><strong>${esc(c.title)}</strong><small>Projektchat</small></span><em>${new Date(c.updated_at).toLocaleDateString('de-DE')}</em></button>`).join('') || '<div class="empty-list">Noch keine Chats im Projekt.</div>'}</div></div>`;
   $('#editProjectBtn').onclick = () => openProjectModal(d.project);
   $('#projectNewChat').onclick = newChat;
+  $('#projectMemoryTab').onclick = () => renderMemoryView({ embedded: true, project: d.project });
+  $('#projectSourcesTab').onclick = () => {
+    selectedMetadata = null;
+    setWorkspaceTab('sources');
+  };
   document.querySelectorAll('.project-chat-row').forEach(r => r.onclick = () => loadChat(Number(r.dataset.id)));
+}
+
+function memoryDate(value) {
+  return value ? new Date(value).toLocaleString('de-DE') : 'nie';
+}
+
+function filteredMemoryItems() {
+  const q = memoryFilters.q.toLowerCase();
+  return (memoryItems || []).filter(item => {
+    if (!memoryFilters.archived && item.is_archived) return false;
+    if (memoryFilters.scope !== 'all' && item.scope !== memoryFilters.scope) return false;
+    const haystack = [item.title, item.content, item.source, (item.tags || []).join(' ')].join(' ').toLowerCase();
+    return !q || haystack.includes(q);
+  });
+}
+
+function renderMemoryView(options = {}) {
+  showProjectsSurface();
+  setActiveNav('memoryBtn');
+  const project = options.project || currentProject;
+  const defaultScope = project?.id ? 'project' : currentChatId ? 'chat' : 'global';
+  const rows = filteredMemoryItems().map(item => `
+    <div class="memory-row ${item.is_pinned ? 'pinned' : ''} ${item.is_archived ? 'archived' : ''}" data-id="${esc(item.id)}">
+      <div>
+        <strong>${esc(item.title)}</strong>
+        <p>${esc(item.content)}</p>
+        <div class="memory-meta">
+          <span>${esc(item.scope)}</span>
+          <span>erstellt ${memoryDate(item.created_at)}</span>
+          <span>aktualisiert ${memoryDate(item.updated_at)}</span>
+          ${item.source ? `<span>Quelle: ${esc(item.source)}</span>` : ''}
+          ${item.confidence ? `<span>Confidence: ${esc(item.confidence)}</span>` : ''}
+        </div>
+        <div class="memory-tags">${(item.tags || []).map(tag => `<span>${esc(tag)}</span>`).join('')}</div>
+      </div>
+      <div class="memory-actions">
+        <button class="mini-btn edit-memory" type="button" title="Bearbeiten">${icons['edit-3']}</button>
+        <button class="mini-btn pin-memory" type="button" title="Pinnen">${item.is_pinned ? '★' : '☆'}</button>
+        <button class="mini-btn archive-memory" type="button" title="Archivieren">${icons.archive}</button>
+        <button class="mini-btn delete-memory" type="button" title="Löschen">${icons['trash-2']}</button>
+      </div>
+    </div>`).join('');
+  $('#projectsView').innerHTML = `
+    <div class="projects-shell memory-shell">
+      <div class="projects-head">
+        <div><h1>Memory</h1><p>Sichtbar, editierbar, löschbar. Keine magische Datenbank im Schatten.</p></div>
+        <div class="project-tools"><input class="input" id="memorySearch" placeholder="Memory suchen"><button class="primary" id="newMemoryBtn" type="button">Neu</button></div>
+      </div>
+      <div class="memory-filters">
+        <button class="${memoryFilters.scope === 'all' ? 'active' : ''}" data-scope="all">Alle</button>
+        <button class="${memoryFilters.scope === 'global' ? 'active' : ''}" data-scope="global">Global</button>
+        <button class="${memoryFilters.scope === 'project' ? 'active' : ''}" data-scope="project">Projekt</button>
+        <button class="${memoryFilters.scope === 'chat' ? 'active' : ''}" data-scope="chat">Chat</button>
+        <label class="check small-check"><input type="checkbox" id="memoryArchived" ${memoryFilters.archived ? 'checked' : ''}><span>Archiv zeigen</span></label>
+      </div>
+      <div class="memory-editor hidden" id="memoryEditor">
+        <div class="grid-2">
+          <div><label>Titel</label><input class="input" id="memoryTitle"></div>
+          <div><label>Scope</label><select class="input" id="memoryScope"><option value="global">global</option><option value="project">project</option><option value="chat">chat</option></select></div>
+          <div><label>Tags</label><input class="input" id="memoryTags" placeholder="komma, getrennt"></div>
+          <div><label>Confidence</label><select class="input" id="memoryConfidence"><option value="">nicht gesetzt</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select></div>
+        </div>
+        <label>Quelle</label><input class="input" id="memorySource" placeholder="manuell, Datei, Chat...">
+        <label>Inhalt</label><textarea class="textarea context-area" id="memoryContent"></textarea>
+        <div class="context-actions"><button class="ghost" id="cancelMemoryBtn" type="button">Abbrechen</button><button class="primary" id="saveMemoryBtn" type="button">Memory speichern</button></div>
+      </div>
+      <div class="memory-list">${rows || '<div class="empty-list">Noch kein Memory. Du entscheidest, was gespeichert wird.</div>'}</div>
+    </div>`;
+  $('#memorySearch').value = memoryFilters.q;
+  $('#memorySearch').oninput = e => { memoryFilters.q = e.target.value; renderMemoryView({ project }); };
+  $('#memoryArchived').onchange = e => { memoryFilters.archived = e.target.checked; renderMemoryView({ project }); };
+  document.querySelectorAll('.memory-filters button').forEach(btn => btn.onclick = () => { memoryFilters.scope = btn.dataset.scope || 'all'; renderMemoryView({ project }); });
+  $('#newMemoryBtn').onclick = () => openMemoryEditor({ scope: defaultScope, project_id: project?.id || null, chat_id: currentChatId || null });
+  $('#cancelMemoryBtn').onclick = () => $('#memoryEditor').classList.add('hidden');
+  $('#saveMemoryBtn').onclick = () => saveMemoryItem().catch(e => showError(e, 'Memory konnte nicht gespeichert werden'));
+  document.querySelectorAll('.memory-row').forEach(row => {
+    const item = memoryItems.find(x => x.id === row.dataset.id);
+    row.querySelector('.edit-memory').onclick = () => openMemoryEditor(item);
+    row.querySelector('.pin-memory').onclick = () => patchMemoryItem(item.id, { is_pinned: !item.is_pinned });
+    row.querySelector('.archive-memory').onclick = () => patchMemoryItem(item.id, { is_archived: !item.is_archived });
+    row.querySelector('.delete-memory').onclick = () => deleteMemoryItem(item.id);
+  });
+  injectIcons($('#projectsView'));
+}
+
+function openMemoryEditor(item = {}) {
+  editingMemoryId = item.id || '';
+  $('#memoryEditor').classList.remove('hidden');
+  $('#memoryTitle').value = item.title || '';
+  $('#memoryScope').value = item.scope || (currentProjectId ? 'project' : currentChatId ? 'chat' : 'global');
+  $('#memoryTags').value = Array.isArray(item.tags) ? item.tags.join(', ') : '';
+  $('#memoryConfidence').value = item.confidence || '';
+  $('#memorySource').value = item.source || 'manuell';
+  $('#memoryContent').value = item.content || '';
+  $('#memoryTitle').focus();
+}
+
+function upsertMemoryLocal(item) {
+  const idx = memoryItems.findIndex(x => x.id === item.id);
+  if (idx >= 0) memoryItems[idx] = item;
+  else memoryItems.unshift(item);
+  currentProjectMemory = memoryItems;
+}
+
+async function saveMemoryItem() {
+  const scope = $('#memoryScope').value;
+  const body = {
+    title: $('#memoryTitle').value || 'Memory',
+    scope,
+    content: $('#memoryContent').value,
+    tags: $('#memoryTags').value.split(',').map(x => x.trim()).filter(Boolean),
+    confidence: $('#memoryConfidence').value || null,
+    source: $('#memorySource').value || 'manuell',
+    project_id: scope === 'project' ? currentProjectId || currentProject?.id : null,
+    chat_id: scope === 'chat' ? currentChatId : null
+  };
+  const item = editingMemoryId
+    ? await api('/api/memory/' + editingMemoryId, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    : await api('/api/memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  upsertMemoryLocal(item);
+  editingMemoryId = '';
+  renderMemoryView({ project: currentProject });
+  toast('Memory gespeichert');
+}
+
+async function patchMemoryItem(id, patch) {
+  const existing = memoryItems.find(x => x.id === id);
+  if (!existing) return;
+  const updated = await api('/api/memory/' + id, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...existing, ...patch })
+  });
+  upsertMemoryLocal(updated);
+  renderMemoryView({ project: currentProject });
+}
+
+async function deleteMemoryItem(id) {
+  if (!confirm('Memory-Eintrag endgültig löschen?')) return;
+  await api('/api/memory/' + id, { method: 'DELETE' });
+  memoryItems = memoryItems.filter(x => x.id !== id);
+  currentProjectMemory = memoryItems;
+  renderMemoryView({ project: currentProject });
+  toast('Memory gelöscht');
+}
+
+async function showMemory() {
+  if (!me.authenticated) { setAuthMode('login'); $('#loginModal').classList.remove('hidden'); return; }
+  if (currentProject?.id && currentProjectMemory.length) {
+    memoryItems = currentProjectMemory;
+  } else {
+    const qs = new URLSearchParams({ archived: 'all' });
+    if (currentProjectId) qs.set('project_id', currentProjectId);
+    if (currentChatId) qs.set('chat_id', currentChatId);
+    memoryItems = await api('/api/memory?' + qs.toString());
+    currentProjectMemory = memoryItems;
+  }
+  renderMemoryView({ project: currentProject });
 }
 
 async function openProjectModal(project = null) {
@@ -573,8 +1021,13 @@ async function newChat() {
   currentShareToken = '';
   currentSharedChat = false;
   currentChatHasContext = false;
+  currentArtifacts = [];
+  selectedArtifactId = '';
+  selectedAnswer = null;
+  selectedMetadata = null;
   updateContextIndicator();
   renderEmpty();
+  renderWorkspace();
   renderChats();
   closeSidebar();
   input.focus();
@@ -624,7 +1077,18 @@ async function send() {
   try {
     const d = await api('/api/send', { method: 'POST', body: fd });
     wait.remove();
-    addMsg('assistant', d.assistant_message.content, d.assistant_message.meta || {}, d.assistant_message.content_html, d.assistant_message.id);
+    addMsg('assistant', d.assistant_message.content, d.assistant_message.meta || {}, d.assistant_message.content_html, d.assistant_message.id, d.assistant_message);
+    selectedAnswer = {
+      id: d.assistant_message.id,
+      content: d.assistant_message.content,
+      content_html: d.assistant_message.content_html,
+      meta: parseMeta(d.assistant_message.meta),
+      artifacts: d.assistant_message.artifacts || [],
+      answer_metadata: d.assistant_message.answer_metadata || null
+    };
+    selectedMetadata = d.assistant_message.answer_metadata || null;
+    mergeArtifacts(d.assistant_message.artifacts || []);
+    renderWorkspace();
     if (d.chat_id) currentChatId = d.chat_id;
     await refreshMe();
     await loadChats();
@@ -784,7 +1248,7 @@ async function runSmartAction(action, sourceMessageId, sourceContent) {
     });
     wait.remove();
     addMsg('user', d.user_message.content, d.user_message.meta, '', d.user_message.id);
-    addMsg('assistant', d.assistant_message.content, {}, d.assistant_message.content_html, d.assistant_message.id);
+    addMsg('assistant', d.assistant_message.content, d.assistant_message.meta || {}, d.assistant_message.content_html, d.assistant_message.id, d.assistant_message);
     await loadChats();
   } catch (e) {
     wait.remove();
@@ -797,7 +1261,7 @@ async function runSmartAction(action, sourceMessageId, sourceContent) {
 }
 
 function setActiveNav(id) {
-  ['homeBtn', 'searchBtn', 'projectsBtn', 'archiveBtn'].forEach(navId => {
+  ['homeBtn', 'searchBtn', 'projectsBtn', 'memoryBtn', 'archiveBtn'].forEach(navId => {
     document.getElementById(navId)?.classList.toggle('active', navId === id);
   });
 }
@@ -1118,7 +1582,26 @@ function bindEvents() {
   });
   $('#newChatBtn').onclick = newChat;
   $('#projectsBtn').onclick = () => showProjects().catch(e => showError(e, 'Projekte nicht verfügbar'));
+  $('#memoryBtn').onclick = () => showMemory().catch(e => showError(e, 'Memory nicht verfügbar'));
   $('#searchBtn').onclick = () => { setActiveNav('searchBtn'); $('#chatSearch').focus(); };
+  $('#openWorkspaceBtn')?.addEventListener('click', () => {
+    workspaceOpen = true;
+    workspaceCollapsed = false;
+    localStorage.setItem('holo_rick_workspace_collapsed', 'false');
+    renderWorkspace();
+  });
+  $('#closeWorkspaceBtn')?.addEventListener('click', () => {
+    workspaceOpen = false;
+    updateWorkspaceShell();
+  });
+  $('#collapseWorkspaceBtn')?.addEventListener('click', () => {
+    workspaceCollapsed = !workspaceCollapsed;
+    localStorage.setItem('holo_rick_workspace_collapsed', String(workspaceCollapsed));
+    renderWorkspace();
+  });
+  $('#workspaceTabs')?.querySelectorAll('button').forEach(tab => {
+    tab.onclick = () => setWorkspaceTab(tab.dataset.tab || 'answer', false);
+  });
   $('#closeProjectBtn')?.addEventListener('click', () => $('#projectModal')?.classList.add('hidden'));
   $('#closeShareBtn')?.addEventListener('click', () => $('#shareModal')?.classList.add('hidden'));
   $('#createShareBtn')?.addEventListener('click', () => createShareLink().catch(e => showError(e, 'Teillink konnte nicht erstellt werden')));
@@ -1153,7 +1636,11 @@ function bindEvents() {
   document.addEventListener('click', () => toggleModePopover(false));
   $('#openSidebarBtn').onclick = openSidebar;
   $('#closeSidebarBtn').onclick = closeSidebar;
-  backdrop.onclick = closeSidebar;
+  backdrop.onclick = () => {
+    closeSidebar();
+    workspaceOpen = false;
+    updateWorkspaceShell();
+  };
   $('#chatSearch').oninput = renderChats;
   $('#homeBtn').onclick = () => {
     showChatSurface();
@@ -1228,6 +1715,8 @@ function bindEvents() {
       contextDrawer.classList.add('hidden');
       $('#settingsModal').classList.add('hidden');
       $('#loginModal').classList.add('hidden');
+      workspaceOpen = false;
+      updateWorkspaceShell();
       closeSidebar();
     }
   });
@@ -1238,6 +1727,7 @@ async function boot() {
   bindEvents();
   updateModeUi();
   updateContextIndicator();
+  renderWorkspace();
   renderEmpty();
   await refreshMe();
   if (await openSharedChatFromUrl()) {
