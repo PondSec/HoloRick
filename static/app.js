@@ -1424,8 +1424,10 @@ function setActiveNav(id) {
 function updateModeUi() {
   document.querySelectorAll('.mode-option').forEach(btn => btn.classList.toggle('active', btn.dataset.mode === aiMode));
   document.querySelectorAll('.format-option').forEach(btn => btn.classList.toggle('active', btn.dataset.format === responseFormat));
-  $('#activeModeLabel').innerHTML = `<span>${esc(modeLabels[aiMode] || 'Holo Rick')}</span><small>${esc(formatLabels[responseFormat] || 'Auto')}</small><i data-icon="chevron-down"></i>`;
-  injectIcons($('#activeModeLabel'));
+  const label = $('#activeModeLabel');
+  const brandSrc = label.querySelector('.brand-mark')?.getAttribute('src') || '/static/brand/pondsec-p-icon-64.png';
+  label.innerHTML = `<img class="brand-mark" src="${esc(brandSrc)}" alt="" aria-hidden="true"><span>${esc(modeLabels[aiMode] || 'Holo Rick')}</span><small>${esc(formatLabels[responseFormat] || 'Auto')}</small><i data-icon="chevron-down"></i>`;
+  injectIcons(label);
 }
 
 function toggleModePopover(force) {
