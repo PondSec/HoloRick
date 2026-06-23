@@ -1827,21 +1827,22 @@ button { color: inherit; }
 .onboarding-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(0,0,0,.34);
+  background: rgba(0,0,0,.44);
   backdrop-filter: blur(2px);
 }
-.onboarding-focus {
-  position: relative;
-  z-index: 71 !important;
-  outline: 2px solid rgba(238,238,238,.92);
-  outline-offset: 6px;
-  box-shadow: 0 0 0 9999px rgba(0,0,0,.28), 0 18px 70px rgba(0,0,0,.48);
-  border-radius: 16px;
+.onboarding-spotlight {
+  position: absolute;
+  z-index: 71;
+  border: 2px solid rgba(238,238,238,.88);
+  border-radius: 18px;
+  box-shadow: 0 0 0 9999px rgba(0,0,0,.18), 0 18px 70px rgba(0,0,0,.48);
+  pointer-events: none;
+  transition: left .22s ease, top .22s ease, width .22s ease, height .22s ease;
 }
 .onboarding-card {
   position: absolute;
   z-index: 72;
-  width: min(360px, calc(100vw - 28px));
+  width: min(400px, calc(100vw - 28px));
   background: #202020;
   border: 1px solid #3b3b3b;
   border-radius: 18px;
