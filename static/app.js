@@ -33,7 +33,7 @@ let currentChatHasContext = false;
 let currentShareToken = '';
 let currentSharedChat = false;
 let workspaceTab = localStorage.getItem('holo_rick_workspace_tab') || 'answer';
-let workspaceCollapsed = localStorage.getItem('holo_rick_workspace_collapsed') === 'true';
+let workspaceCollapsed = localStorage.getItem('holo_rick_workspace_collapsed') !== 'false';
 let workspaceOpen = false;
 let currentArtifacts = [];
 let selectedArtifactId = '';
@@ -65,9 +65,9 @@ const quickPrompts = [
 ];
 
 const actionLabels = {
-  summary: 'Kurz',
-  tasks: 'To-dos',
-  risks: 'Risiken'
+  summary: { label: 'Kurz', icon: 'file-text' },
+  tasks: { label: 'To-dos', icon: 'list-checks' },
+  risks: { label: 'Risiken', icon: 'alert-triangle' }
 };
 
 const guestActionPrompts = {
@@ -82,6 +82,7 @@ const icons = {
   'search': '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>',
   'message-circle': '<svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 17 0Z"/></svg>',
   'circle': '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></svg>',
+  'home': '<svg viewBox="0 0 24 24"><path d="m3 11 9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg>',
   'trash': '<svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>',
   'briefcase': '<svg viewBox="0 0 24 24"><path d="M10 6V5a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v1"/><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M3 12h18"/></svg>',
   'wand': '<svg viewBox="0 0 24 24"><path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9H6"/><path d="M20 9h-2"/><path d="m17.8 6.2 1.4-1.4"/><path d="m10.8 13.2-1.4 1.4"/><path d="m9.4 3.8 1.4 1.4"/><path d="m14 10 7 7-4 4-7-7Z"/></svg>',
@@ -101,12 +102,16 @@ const icons = {
   'file-text': '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>',
   'brain': '<svg viewBox="0 0 24 24"><path d="M9 3a3 3 0 0 0-3 3v1a3 3 0 0 0-2 5.2A3.5 3.5 0 0 0 7.5 19H9V3Z"/><path d="M15 3a3 3 0 0 1 3 3v1a3 3 0 0 1 2 5.2A3.5 3.5 0 0 1 16.5 19H15V3Z"/><path d="M9 8H7.5M15 8h1.5M9 14H7.5M15 14h1.5"/></svg>',
   'layout-panel-right': '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/><path d="m10 9-3 3 3 3"/></svg>',
+  'workspace-expand': '<svg viewBox="0 0 24 24"><path d="M20 4v16"/><path d="M4 12h12"/><path d="m10 6-6 6 6 6"/></svg>',
   'key-round': '<svg viewBox="0 0 24 24"><path d="M2 18v3h3l9.2-9.2"/><circle cx="16.5" cy="7.5" r="5.5"/></svg>',
   'smartphone': '<svg viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>',
   'copy': '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><rect x="2" y="2" width="13" height="13" rx="2"/></svg>',
   'download': '<svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>',
   'folder': '<svg viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.5L10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z"/></svg>',
-  'more-horizontal': '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>'
+  'more-horizontal': '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>',
+  'list-checks': '<svg viewBox="0 0 24 24"><path d="m3 7 2 2 4-4"/><path d="M11 7h10"/><path d="m3 17 2 2 4-4"/><path d="M11 17h10"/></svg>',
+  'alert-triangle': '<svg viewBox="0 0 24 24"><path d="m12 3 10 18H2Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
+  'help-circle': '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 1 1 5.8 1c-.7 1-1.9 1.3-2.4 2.4"/><path d="M12 17h.01"/></svg>'
 };
 
 function injectIcons(root = document) {
@@ -340,6 +345,12 @@ function updateWorkspaceShell() {
   document.body.classList.toggle('workspace-collapsed', workspaceCollapsed);
   document.body.classList.toggle('workspace-open', workspaceOpen);
   $('#workspaceTabs')?.querySelectorAll('button').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === workspaceTab));
+  const collapseBtn = $('#collapseWorkspaceBtn');
+  if (collapseBtn) {
+    collapseBtn.innerHTML = workspaceCollapsed ? icons['workspace-expand'] : icons['layout-panel-right'];
+    collapseBtn.title = workspaceCollapsed ? 'Workspace ausklappen' : 'Workspace einklappen';
+    collapseBtn.setAttribute('aria-label', collapseBtn.title);
+  }
 }
 
 function setWorkspaceTab(tab, open = true) {
@@ -600,15 +611,15 @@ function addMsg(role, content, meta = {}, contentHtml = '', messageId = null, ex
   const artifacts = extras.artifacts || [];
   const answerMetadata = extras.answer_metadata || null;
   const smartActions = role === 'assistant' && !generatedImage
-    ? Object.entries(actionLabels).map(([key, label]) => `<button class="smart-action" type="button" data-action="${key}">${label}</button>`).join('')
+    ? Object.entries(actionLabels).map(([key, action]) => `<button class="action-icon smart-action" type="button" data-action="${key}" title="${esc(action.label)}" aria-label="${esc(action.label)}">${icons[action.icon]}</button>`).join('')
     : '';
   const trustActions = role === 'assistant'
     ? `
-      ${artifacts.length ? '<button class="artifact-open" type="button">Artifact öffnen</button>' : ''}
-      <button class="sources-open" type="button" data-panel="sources">Quellen</button>
-      <button class="work-open" type="button" data-panel="sources">Arbeitsnachweis</button>
-      <button class="uncertainty-open" type="button" data-panel="sources">Unsicherheit</button>
-      <button class="context-open" type="button" data-panel="sources">Kontext</button>`
+      ${artifacts.length ? `<button class="action-icon artifact-open" type="button" title="Artifact öffnen" aria-label="Artifact öffnen">${icons.folder}</button>` : ''}
+      <button class="action-icon sources-open" type="button" data-panel="sources" title="Quellen" aria-label="Quellen">${icons.file}</button>
+      <button class="action-icon work-open" type="button" data-panel="sources" title="Arbeitsnachweis" aria-label="Arbeitsnachweis">${icons['shield-check']}</button>
+      <button class="action-icon uncertainty-open" type="button" data-panel="sources" title="Unsicherheit" aria-label="Unsicherheit">${icons['help-circle']}</button>
+      <button class="action-icon context-open" type="button" data-panel="sources" title="Kontext" aria-label="Kontext">${icons.brain}</button>`
     : '';
   row.innerHTML = `
     ${avatar}
@@ -617,9 +628,9 @@ function addMsg(role, content, meta = {}, contentHtml = '', messageId = null, ex
       ${generatedImage}
       <div class="uploads">${uploadMarkup(parsedMeta)}</div>
       <div class="actions">
-        <button class="copy-msg" type="button">Kopieren</button>
+        <button class="action-icon copy-msg" type="button" title="Kopieren" aria-label="Kopieren">${icons.copy}</button>
         ${smartActions}
-        ${role === 'assistant' ? '<button class="use-as-context" type="button">Weiterfragen</button>' : ''}
+        ${role === 'assistant' ? `<button class="action-icon use-as-context" type="button" title="Weiterfragen" aria-label="Weiterfragen">${icons['message-circle']}</button>` : ''}
         ${trustActions}
       </div>
     </div>`;
@@ -968,10 +979,21 @@ function renderChats() {
     item.innerHTML = `
       <button class="chat-open" type="button" title="Öffnen"><span>${esc(c.title)}</span></button>
       <div class="chat-actions">
+        <button class="mini-btn rename-chat" type="button" title="Umbenennen">${icons['edit-3']}</button>
         <button class="mini-btn archive-chat" type="button" title="${archivedView ? 'Wiederherstellen' : 'Archivieren'}">${icons.archive}</button>
         <button class="mini-btn delete-chat" type="button" title="Löschen">${icons['trash-2']}</button>
       </div>`;
     item.querySelector('.chat-open').onclick = () => loadChat(c.id);
+    item.querySelector('.rename-chat').onclick = async e => {
+      e.stopPropagation();
+      const title = prompt('Chat umbenennen', c.title);
+      if (title === null) return;
+      const trimmed = title.trim();
+      if (!trimmed || trimmed === c.title) return;
+      await api('/api/chats/' + c.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: trimmed }) });
+      await loadChats();
+      toast('Chat umbenannt');
+    };
     item.querySelector('.archive-chat').onclick = async e => {
       e.stopPropagation();
       await api('/api/chats/' + c.id + '/archive', {
@@ -1581,6 +1603,7 @@ function bindEvents() {
     addSelectedFiles(files);
   });
   $('#newChatBtn').onclick = newChat;
+  $('#sectionNewChatBtn')?.addEventListener('click', newChat);
   $('#projectsBtn').onclick = () => showProjects().catch(e => showError(e, 'Projekte nicht verfügbar'));
   $('#memoryBtn').onclick = () => showMemory().catch(e => showError(e, 'Memory nicht verfügbar'));
   $('#searchBtn').onclick = () => { setActiveNav('searchBtn'); $('#chatSearch').focus(); };
