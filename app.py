@@ -3732,7 +3732,7 @@ def chats():
     return jsonify([dict(r) for r in rows])
 
 
-@app.route("/api/chats/<int:chat_id>")
+@app.route("/api/chats/<int:chat_id>", methods=["GET", "PUT"])
 def chat_detail(chat_id):
     user = current_user()
     if not user:
@@ -3740,6 +3740,17 @@ def chat_detail(chat_id):
     row = get_chat_for_user(chat_id, int(user["id"]))
     if not row:
         return jsonify({"error": "Chat nicht gefunden"}), 404
+    if request.method == "PUT":
+        data = request.get_json(silent=True) or {}
+        title = str(data.get("title") or "").strip()[:80]
+        if not title:
+            return jsonify({"error": "Titel fehlt"}), 400
+        with db() as con:
+            con.execute("UPDATE chats SET title=?, updated_at=? WHERE id=? AND user_id=?", (title, now_iso(), chat_id, user["id"]))
+            con.commit()
+        updated = dict(row)
+        updated["title"] = title
+        return jsonify({"chat": updated})
     return jsonify({"chat": dict(row), "messages": fetch_messages(chat_id, int(user["id"]))})
 
 
