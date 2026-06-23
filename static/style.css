@@ -1438,7 +1438,8 @@ button { color: inherit; }
   .sidebar {
     position: fixed;
     inset: 0 auto 0 0;
-    transform: translateX(-105%);
+    transform: translateX(-105%) !important;
+    animation: none;
     box-shadow: 20px 0 60px rgba(0,0,0,.36);
   }
   .desktop-only { display: none; }
