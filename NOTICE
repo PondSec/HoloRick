@@ -1,0 +1,14 @@
+Holo Rick is source-available software by PondSec.
+
+The source can be read and studied publicly, but it is not open-source in the
+OSI sense. You do not receive a general right to modify, fork, sell,
+redistribute, rebrand, or operate derived versions without written permission.
+
+Official Holo Rick builds are expected to come from signed PondSec releases and
+to pass the repository integrity checks. Publicly visible code can always be
+copied locally, so this project focuses on protecting official builds,
+detecting manipulation, blocking unsigned release/deployment changes, and
+making tampering auditable.
+
+See LICENSE, SECURITY.md, and docs/security-architecture.md for details.
+

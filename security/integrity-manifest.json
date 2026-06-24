@@ -1,0 +1,318 @@
+{
+  "schema": "holo-rick.integrity-manifest.v1",
+  "project": "Holo Rick",
+  "version": "security-bootstrap-2e5466b",
+  "created_at": "2026-06-24T07:59:07Z",
+  "hash_algorithm": "sha256",
+  "signature_algorithm": "ed25519",
+  "files": [
+    {
+      "path": ".github/CODEOWNERS",
+      "sha256": "35c266221fb9347548aaa62dc6574e16757d3cb51f67435c3d51cbe045540061",
+      "critical": true
+    },
+    {
+      "path": ".github/workflows/security-integrity.yml",
+      "sha256": "570e608762f9a3943734d67a89fe3a8fb8a030cbfea304263c1b2f24702f8027",
+      "critical": true
+    },
+    {
+      "path": ".gitignore",
+      "sha256": "0611b92960ce3efd8c22c1f116c3bc3b15c6ceca18c6bc1d1e8c6452b7a1a1d7",
+      "critical": false
+    },
+    {
+      "path": "Dockerfile",
+      "sha256": "c9417d956990b3590f3290d47ea00c7d7c6bdb7ad3bfd9d898ce5e58887779cc",
+      "critical": false
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "e183f0c500ab46bea0e3eb3562a4a996705380c0383f73b296ee16f2d847bc72",
+      "critical": true
+    },
+    {
+      "path": "NOTICE",
+      "sha256": "a92c7c9290796e4bbbf009b464849d3739977f59955faa05e60f412451c22346",
+      "critical": true
+    },
+    {
+      "path": "README.md",
+      "sha256": "2eda79cc7c6d28aa7e24ec9fd73db9bcf27a09e7bbb69f244760d2d4030aa6a0",
+      "critical": false
+    },
+    {
+      "path": "SECURITY.md",
+      "sha256": "b8b38e30b770d9ad27a4cbbe784a5daf2fe051e6a05927a80a4e2027ac15874b",
+      "critical": true
+    },
+    {
+      "path": "app.py",
+      "sha256": "97796fe1a854206ab3247e51a01a76f6d1e0da43f2929d60c3fd84ff41e49e44",
+      "critical": false
+    },
+    {
+      "path": "deploy/holo-rick-auto-update.service",
+      "sha256": "eacd3faaeafa896cdb1a8982fe5dd5e1d1840c9cc8894ea39d45238f17a083f9",
+      "critical": false
+    },
+    {
+      "path": "deploy/holo-rick-auto-update.timer",
+      "sha256": "6cc988a9ffc026ecd5c921f2c88aa3571b891a50f0022ffb763d145fb61196f1",
+      "critical": false
+    },
+    {
+      "path": "docker-compose.yml",
+      "sha256": "080b61d30afb16e845fa4dea5601c11efed34b4e06018785906b666184dbeac4",
+      "critical": false
+    },
+    {
+      "path": "docs/license-model.md",
+      "sha256": "5f264ef64056dc7aa5051f6120df452ea4f8de7794938fba77fecabd50e6d2c2",
+      "critical": false
+    },
+    {
+      "path": "docs/release-signing.md",
+      "sha256": "3c76478f421e698f12074ceafbdfbe7cf69ed712dc76c373a8c01ad9bfb873bd",
+      "critical": false
+    },
+    {
+      "path": "docs/security-architecture.md",
+      "sha256": "2fa118dcf272c870155e9279aa1cbf139f4a99be0bdaa0a1c6f9672d78ff948a",
+      "critical": false
+    },
+    {
+      "path": "docs/threat-model.md",
+      "sha256": "d103443127fd5b1495d8db65f3f61ad917d1415d5e2ec00081ef830121bfd591",
+      "critical": false
+    },
+    {
+      "path": "license.md",
+      "sha256": "7a9c9b24bc14dc3a64a1a59ed9fe2c0fb18af7fc4a75b084244e94db8712c6e7",
+      "critical": false
+    },
+    {
+      "path": "macos/HoloRick/AppDelegate.swift",
+      "sha256": "3286e17f8d0bffb360da5cbb91a76b90d2f51903203f94c7b8228d37c4d9e4bc",
+      "critical": false
+    },
+    {
+      "path": "macos/HoloRick/Info.plist",
+      "sha256": "194073049b11da51e63dbee8b7f7c8ce1fcaffd47645a1db5a3ccdf864a9763c",
+      "critical": false
+    },
+    {
+      "path": "macos/HoloRick/main.swift",
+      "sha256": "f4e2359e41455ae4274da44555b5f56ff7897ebafd160fd112b9c82a6068dbf5",
+      "critical": false
+    },
+    {
+      "path": "macos/README.md",
+      "sha256": "b2f94b39fd69fe8481b98c8b4e5fe694222aea4b7657931ee42480910ff3ef6a",
+      "critical": false
+    },
+    {
+      "path": "macos/build_holo_rick_app.sh",
+      "sha256": "43953607127d8987e0842ca66fd3d1901fe37207b63eca3ddb6dba24755884d5",
+      "critical": false
+    },
+    {
+      "path": "requirements.lock",
+      "sha256": "e6c250e9b1c62da97504132e34cc5713235c8091130ab5e8a27ee54ec9955a66",
+      "critical": false
+    },
+    {
+      "path": "requirements.txt",
+      "sha256": "9d45051b3e64a85252d15c2ac8aa2c76925c68417aff1150fdf501f0325bb40b",
+      "critical": false
+    },
+    {
+      "path": "scripts/auto_update.sh",
+      "sha256": "7e704ad9f7f79b020ca1288e98e34fb9a2f3329dc85da6ef55aeb11efbf41f5a",
+      "critical": false
+    },
+    {
+      "path": "scripts/hash_password.py",
+      "sha256": "8c89707a55669fc002220ea97eeea105d4c8e62d7820f8cf36ca5d8bc193b68f",
+      "critical": false
+    },
+    {
+      "path": "scripts/security/check-dependency-lock.py",
+      "sha256": "0479fcaf7871d54c0ef1bbda8b19f040c969f0a14fed0b61760196466abeb7b6",
+      "critical": true
+    },
+    {
+      "path": "scripts/security/check-integrity.py",
+      "sha256": "2d2215a4cd9dc2b67501c081755117bdb4f3279e70aa72f7c5c6960fef8c2c2a",
+      "critical": true
+    },
+    {
+      "path": "scripts/security/generate-integrity-manifest.py",
+      "sha256": "f7d4fec5a05fdacfdac676535b3c10bfc64d9639f97fb94001c288d64595c1e6",
+      "critical": true
+    },
+    {
+      "path": "scripts/security/install-hooks.sh",
+      "sha256": "0bf02a779ed1c0d80f755fd9d01a7618b9a2a5ee9a081b0bb4ed73d990489922",
+      "critical": true
+    },
+    {
+      "path": "scripts/security/rollback-to-trusted.py",
+      "sha256": "8371d67f977a2b89a570015a875105a83da99ec5d46a8a9740ddbebb0577b829",
+      "critical": true
+    },
+    {
+      "path": "scripts/security/verify-agent-token.py",
+      "sha256": "d8cc5cf5a45ee2567aa484a4c815b8e1769d7b8f617dd98c041dda47b2ceb1ce",
+      "critical": true
+    },
+    {
+      "path": "scripts/security/verify-signatures.py",
+      "sha256": "18b2d9168498ac874b2248770f2c2ec76fa5e1909dd2aabb1e312e3c446b4fdd",
+      "critical": true
+    },
+    {
+      "path": "security/__init__.py",
+      "sha256": "bc5010c41a9a1118ca25cefe876ad2e3ca2eba374cdbdca4e749b04eb7c4cd22",
+      "critical": true
+    },
+    {
+      "path": "security/agent-policy.json",
+      "sha256": "55dea2d5333e52adf18d92650e9d09cf0fd8857ef37ea6a1bacae0cf25b3fd68",
+      "critical": true
+    },
+    {
+      "path": "security/agent_policy.py",
+      "sha256": "87f657870c49ec7b8d445a6851e30619a1e04b7019b1342189a05521569365cf",
+      "critical": true
+    },
+    {
+      "path": "security/hooks/pre-commit",
+      "sha256": "af2e230050558cd1e23e775f9060d52f8588d92de6e62b87f2e500cce9593792",
+      "critical": true
+    },
+    {
+      "path": "security/hooks/pre-push",
+      "sha256": "cd498201ef008c9a86a6b440ab33f52d88970a40e4e5b5d4b2e2418415aa6333",
+      "critical": true
+    },
+    {
+      "path": "security/integrity.py",
+      "sha256": "af7875a9afe08b22d681a46e708735825c3b6908ed3f229ed9ceba08270c64bc",
+      "critical": true
+    },
+    {
+      "path": "security/rollback.py",
+      "sha256": "63daf013e2835c569cef0cce8334c1e7166f99da343b082bf7bd70565415d71b",
+      "critical": true
+    },
+    {
+      "path": "security/trust-policy.json",
+      "sha256": "d92ea47bbeb9ae692a8ceab721ab2bbd22fb7f50934626570efc26eae4765ad5",
+      "critical": true
+    },
+    {
+      "path": "security/trust.py",
+      "sha256": "c7a63ea5063ae967030b724a5fa96f4e16534f4d551afdff943d6c441b58c529",
+      "critical": true
+    },
+    {
+      "path": "static/app.js",
+      "sha256": "8c6375a81cad99388a568ec94576a7c69ddfa5769523c9b35138d7819e54cfe5",
+      "critical": false
+    },
+    {
+      "path": "static/brand/holo-rick-app-icon.png",
+      "sha256": "5de40bea9baa678c6e4e42627e73039b83f3db87f1c1e270933a375b17066537",
+      "critical": false
+    },
+    {
+      "path": "static/brand/pondsec-logo-generated-source.png",
+      "sha256": "ce1c2453734003eb93b41ee67db0412495b6703a4344e0c9a7d767fc750b89ff",
+      "critical": false
+    },
+    {
+      "path": "static/brand/pondsec-logo-style-reference.png",
+      "sha256": "f2dbf550d2bfa5c170f8d4ff1a53ca93eac1d14d07839a7be3f06e0dcbceb388",
+      "critical": false
+    },
+    {
+      "path": "static/brand/pondsec-p-icon-1024.png",
+      "sha256": "5de40bea9baa678c6e4e42627e73039b83f3db87f1c1e270933a375b17066537",
+      "critical": false
+    },
+    {
+      "path": "static/brand/pondsec-p-icon-128.png",
+      "sha256": "f326b03d4e14ca5c48fee8641d1a80a3c337bea429d8f67a0665c552a1193729",
+      "critical": false
+    },
+    {
+      "path": "static/brand/pondsec-p-icon-16.png",
+      "sha256": "d120764ad7f9ea07ae47fa5bd6dacd117d8832425e4371e5f6e02e4179f72c02",
+      "critical": false
+    },
+    {
+      "path": "static/brand/pondsec-p-icon-180.png",
+      "sha256": "cae0b9d7125b490a5c84698c169231774c6eed9f9030ba742d68e3e66375a253",
+      "critical": false
+    },
+    {
+      "path": "static/brand/pondsec-p-icon-192.png",
+      "sha256": "ba68400aa4c08b8b003e1c75d611860a4f90861367e3c20d9645abdd48bafc2a",
+      "critical": false
+    },
+    {
+      "path": "static/brand/pondsec-p-icon-256.png",
+      "sha256": "8085a7464a3629442375b3fdb4c28e3e1025830347b38f8639bd69e4423aac98",
+      "critical": false
+    },
+    {
+      "path": "static/brand/pondsec-p-icon-32.png",
+      "sha256": "3746597a4f9452ec8f44590b2409d05279c34dc3d79f8284a5a76a42565ef1ed",
+      "critical": false
+    },
+    {
+      "path": "static/brand/pondsec-p-icon-512.png",
+      "sha256": "50e0eabb363a7a8df9771da1d262197dd561bf4707831717f2611fbf758d018f",
+      "critical": false
+    },
+    {
+      "path": "static/brand/pondsec-p-icon-64.png",
+      "sha256": "eada1abdb59fdc0dcb8f2d8d5b1b524d997276978bb4eb46177c3097f7487782",
+      "critical": false
+    },
+    {
+      "path": "static/brand/pondsec-p-logo.png",
+      "sha256": "5de40bea9baa678c6e4e42627e73039b83f3db87f1c1e270933a375b17066537",
+      "critical": false
+    },
+    {
+      "path": "static/style.css",
+      "sha256": "04658cdacbb36b1d797e7b628a3305ec98e6a15ea1d79de28362d66213564ef0",
+      "critical": false
+    },
+    {
+      "path": "templates/index.html",
+      "sha256": "17144c7bd9104a5761ef8530bdf6b181ce08982c268f365763babf7efe967ac5",
+      "critical": false
+    },
+    {
+      "path": "test_app.py",
+      "sha256": "910f0d2b46f98b333f859e9debf5a7c2cf19977407db6a9000a344b0a798be09",
+      "critical": false
+    },
+    {
+      "path": "test_security.py",
+      "sha256": "e34ecd8418572d23f59b0ce12dece9bb4d8e549919ada7e636aa1c094a988abe",
+      "critical": false
+    }
+  ],
+  "signatures": [
+    {
+      "signer_id": "pondsec-root-2026-06-bootstrap",
+      "purpose": "integrity_manifest",
+      "algorithm": "ed25519",
+      "signature": "+LoqUSNaOCRUNWHlrohkTw2fKep4cPSP+k3UlMS/LNu+Sa3gE4IR13QGi+XM7ZXN0XiRXMHAcmPvA1KnKWYFDQ=="
+    }
+  ]
+}

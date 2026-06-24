@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Holo Rick</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/brand/pondsec-p-icon-32.png?v={{ asset_version }}">
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/brand/pondsec-p-icon-192.png?v={{ asset_version }}">
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/brand/pondsec-p-icon-180.png?v={{ asset_version }}">
   <link rel="stylesheet" href="/static/style.css?v={{ asset_version }}">
 </head>
 <body>
@@ -30,7 +33,7 @@
   <main class="main">
     <header class="topbar">
       <button class="icon-btn mobile-only" id="openSidebarBtn" data-icon="sidebar"></button>
-      <button class="model-pill" id="activeModeLabel" type="button" aria-haspopup="dialog" aria-expanded="false"><span>Holo Rick</span><small>Auto</small><i data-icon="chevron-down"></i></button>
+      <button class="model-pill" id="activeModeLabel" type="button" aria-haspopup="dialog" aria-expanded="false"><img class="brand-mark" src="/static/brand/pondsec-p-icon-64.png?v={{ asset_version }}" alt="" aria-hidden="true"><span>Holo Rick</span><small>Auto</small><i data-icon="chevron-down"></i></button>
       <div class="top-actions">
         <button class="share-btn" type="button">Gemeinsam nutzen</button>
         <button class="icon-btn mobile-only" id="openWorkspaceBtn" title="Workspace" data-icon="layout-panel-right"></button>
@@ -111,7 +114,7 @@
 <div class="auth-page hidden" id="loginModal" aria-label="Kontozugang">
   <div class="auth-stage">
     <section class="auth-intro">
-      <div class="auth-mark">H</div>
+      <div class="auth-mark"><img src="/static/brand/pondsec-p-logo.png?v={{ asset_version }}" alt="PondSec"></div>
       <h1>Holo Rick</h1>
       <p>Ein ruhiger Arbeitsplatz für Chat, Dateien, Projektkontext und Bildideen.</p>
       <div class="auth-points">

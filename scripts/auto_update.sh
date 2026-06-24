@@ -42,6 +42,10 @@ health_check() {
   return 1
 }
 
+integrity_check() {
+  HOLO_RICK_INTEGRITY_MODE=block python3 scripts/security/check-integrity.py --mode block
+}
+
 rollback_to_commit() {
   local rollback_commit="$1"
   local db_backup="${2:-}"
@@ -92,6 +96,10 @@ main() {
 
   if [[ "$old_commit" == "$target_commit" ]]; then
     log "Keine neuen Änderungen"
+    if ! integrity_check; then
+      log "Integritätsprüfung des aktuellen Standes fehlgeschlagen"
+      return 2
+    fi
     if health_check 3; then
       printf '%s\n' "$old_commit" > "$STABLE_FILE"
     fi
@@ -107,6 +115,12 @@ main() {
   if ! git merge --ff-only "$REMOTE/$BRANCH"; then
     log "Fast-Forward nicht möglich. Update abgebrochen."
     return 3
+  fi
+
+  if ! integrity_check; then
+    log "Integritätsprüfung nach Update fehlgeschlagen"
+    rollback_to_commit "$old_commit" "$db_backup"
+    return 1
   fi
 
   if ! compose build "$SERVICE"; then

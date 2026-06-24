@@ -1,0 +1,44 @@
+name: Security Integrity
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - dev
+  release:
+    types:
+      - published
+
+permissions:
+  contents: read
+
+jobs:
+  integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pytest
+      - name: Security files present
+        run: test -f LICENSE && test -f NOTICE && test -f SECURITY.md && test -f security/trust-policy.json && test -f security/integrity-manifest.json
+      - name: Integrity check
+        env:
+          HOLO_RICK_INTEGRITY_MODE: block
+        run: python scripts/security/check-integrity.py --mode block
+      - name: Signature check
+        run: python scripts/security/verify-signatures.py
+      - name: Dependency lock check
+        run: python scripts/security/check-dependency-lock.py
+      - name: Test suite
+        env:
+          HOLO_RICK_INTEGRITY_MODE: warn
+        run: pytest -q
+

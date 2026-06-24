@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>de</string>
+	<key>CFBundleDisplayName</key>
+	<string>Holo Rick</string>
+	<key>CFBundleExecutable</key>
+	<string>HoloRick</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.pondsec.holorick</string>
+	<key>CFBundleIconFile</key>
+	<string>HoloRick</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Holo Rick</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.productivity</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>13.0</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Holo Rick kann Kamerazugriff nur verwenden, wenn chat.pondsec.com dies in Zukunft ausdrücklich anfordert.</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright © 2026 PondSec</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Holo Rick kann Mikrofonzugriff nur verwenden, wenn chat.pondsec.com dies in Zukunft ausdrücklich anfordert.</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+	<key>NSSupportsAutomaticGraphicsSwitching</key>
+	<true/>
+</dict>
+</plist>
