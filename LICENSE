@@ -1,0 +1,57 @@
+Holo Rick Source-Available License
+Version 1.0, 2026-06-24
+
+Copyright (c) 2026 PondSec. All rights reserved.
+
+This is a custom source-available license. It allows public reading and study of
+the source code without granting a general right to modify, fork, redistribute,
+rebrand, sell, sublicense, host, or distribute derived versions. This license
+should be reviewed by qualified legal counsel before commercial enforcement.
+
+1. Permission to Read
+
+You may view, read, inspect, and study the source code in this repository for
+personal evaluation, security review, education, and interoperability analysis.
+This permission does not grant ownership, patent rights, trademark rights, or
+any right to distribute modified or unmodified copies.
+
+2. Restrictions
+
+Without prior written permission from PondSec, you may not:
+
+- modify, fork, adapt, translate, or create derivative works for distribution;
+- redistribute, publish, mirror, sublicense, rent, lease, sell, resell, or make
+  the source code or derived work available to third parties;
+- use the code, UI, assets, project identity, name, branding, prompts, or
+  product design to operate a competing service or rebranded version;
+- remove or bypass license, notice, source-integrity, signature, CI, release, or
+  manipulation-protection systems in an official build context;
+- represent an unofficial build, fork, deployment, or derivative as official;
+- use PondSec, Holo Rick, project logos, UI identity, or related marks in a
+  derivative project.
+
+3. Official Builds and Releases
+
+Official builds are only those published by PondSec from signed releases or
+other cryptographically authorized release processes described in this
+repository. Unsigned builds, local copies, forks, and modified versions are not
+official PondSec releases.
+
+4. Contributions
+
+Submitting a patch, pull request, issue, suggestion, or other contribution does
+not grant you any right to redistribute the project. Unless otherwise agreed in
+writing, you grant PondSec a perpetual, worldwide, royalty-free license to use,
+modify, sublicense, and distribute your contribution as part of Holo Rick.
+
+5. No Warranty
+
+The source code is provided for inspection "as is", without warranty of any kind,
+including implied warranties of merchantability, fitness for a particular
+purpose, title, non-infringement, or security.
+
+6. Termination
+
+Any permission granted by this license terminates automatically if you violate
+its terms. PondSec reserves all rights not expressly granted.
+

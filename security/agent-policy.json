@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "default_mode": "read-only",
+  "default_permissions": {
+    "allow_read": true,
+    "allow_write": false,
+    "allow_modify_security_files": false,
+    "allow_release": false,
+    "allow_license_change": false
+  },
+  "critical_globs": [
+    "LICENSE",
+    "NOTICE",
+    "SECURITY.md",
+    "docs/security-architecture.md",
+    "docs/release-signing.md",
+    "docs/license-model.md",
+    "docs/threat-model.md",
+    "security/**",
+    "scripts/security/**",
+    ".github/**",
+    "Dockerfile",
+    "docker-compose.yml",
+    "deploy/**",
+    "requirements.txt",
+    "requirements.lock"
+  ],
+  "token_requirements": {
+    "algorithm": "ed25519",
+    "required_claims": [
+      "permissions",
+      "paths",
+      "expires_at",
+      "reason"
+    ]
+  }
+}

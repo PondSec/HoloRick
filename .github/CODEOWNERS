@@ -1,0 +1,18 @@
+* @PondSec
+
+/.github/ @PondSec
+/security/ @PondSec
+/scripts/security/ @PondSec
+/LICENSE @PondSec
+/NOTICE @PondSec
+/SECURITY.md @PondSec
+/docs/security-architecture.md @PondSec
+/docs/release-signing.md @PondSec
+/docs/license-model.md @PondSec
+/docs/threat-model.md @PondSec
+/Dockerfile @PondSec
+/docker-compose.yml @PondSec
+/deploy/ @PondSec
+/requirements.txt @PondSec
+/requirements.lock @PondSec
+

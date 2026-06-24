@@ -2,6 +2,11 @@
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+agent-token*.json
+security/private/
+.security-private/
 
 # Runtime databases / chats
 *.db

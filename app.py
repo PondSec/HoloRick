@@ -8,6 +8,7 @@ import re
 import secrets
 import sqlite3
 import subprocess
+import sys
 import threading
 import time
 import urllib.error
@@ -29,6 +30,8 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
+from security.integrity import run_startup_integrity_check
+
 BASE_DIR = Path(__file__).resolve().parent
 INSTANCE_DIR = BASE_DIR / "instance"
 UPLOAD_DIR = BASE_DIR / "uploads"
@@ -36,6 +39,7 @@ DB_PATH = INSTANCE_DIR / "holo_rick.db"
 INSTANCE_DIR.mkdir(exist_ok=True)
 UPLOAD_DIR.mkdir(exist_ok=True)
 load_dotenv(BASE_DIR / ".env")
+INTEGRITY_STARTUP_REPORT = run_startup_integrity_check(BASE_DIR)
 
 
 DEFAULT_UPLOAD_EXTENSIONS = {
@@ -3104,6 +3108,7 @@ def git_update_now() -> tuple[bool, str]:
             ["git", "remote", "set-url", "origin", repo_url],
             ["git", "fetch", "origin", branch],
             ["git", "merge", "--ff-only", f"origin/{branch}"],
+            [sys.executable, "scripts/security/check-integrity.py", "--mode", "block"],
         ]
         outputs = []
         for cmd in cmds:
