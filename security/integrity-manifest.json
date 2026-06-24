@@ -1,8 +1,8 @@
 {
   "schema": "holo-rick.integrity-manifest.v1",
   "project": "Holo Rick",
-  "version": "security-bootstrap-34dd4fc",
-  "created_at": "2026-06-24T07:55:58Z",
+  "version": "security-bootstrap-2e5466b",
+  "created_at": "2026-06-24T07:59:07Z",
   "hash_algorithm": "sha256",
   "signature_algorithm": "ed25519",
   "files": [
@@ -43,7 +43,7 @@
     },
     {
       "path": "SECURITY.md",
-      "sha256": "e6970e02e8c3751c25863e1ffcf4748a426af6cff4f57575e806d5624812208b",
+      "sha256": "b8b38e30b770d9ad27a4cbbe784a5daf2fe051e6a05927a80a4e2027ac15874b",
       "critical": true
     },
     {
@@ -168,7 +168,7 @@
     },
     {
       "path": "scripts/security/verify-signatures.py",
-      "sha256": "8329ae98e438b30b67277b0169111eb5e706fd4a4a0e653ed0c641f4c5237459",
+      "sha256": "18b2d9168498ac874b2248770f2c2ec76fa5e1909dd2aabb1e312e3c446b4fdd",
       "critical": true
     },
     {
@@ -312,7 +312,7 @@
       "signer_id": "pondsec-root-2026-06-bootstrap",
       "purpose": "integrity_manifest",
       "algorithm": "ed25519",
-      "signature": "0N+NcxntAPEGgbS/qcEr8Rr+M4zYtTqXKaM2ojKcTERcdTHq/en5mJgKVG+6Ru4eH8s/acP/d8bP9oLgLK7RDg=="
+      "signature": "+LoqUSNaOCRUNWHlrohkTw2fKep4cPSP+k3UlMS/LNu+Sa3gE4IR13QGi+XM7ZXN0XiRXMHAcmPvA1KnKWYFDQ=="
     }
   ]
 }

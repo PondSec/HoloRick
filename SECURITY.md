@@ -42,7 +42,11 @@ Enable these settings manually on GitHub:
 6. Create a signed Git tag.
 7. Build release artifacts only from that signed tag.
 
+Set `HOLO_RICK_REQUIRE_SIGNED_COMMITS=1` in release-only workflows if unsigned
+or unverifiable Git commits must fail CI. The default CI keeps commit signature
+status informational because GitHub merge refs can report `E` when local trust
+material is unavailable.
+
 ## Reporting Vulnerabilities
 
 Report security issues privately to PondSec before public disclosure.
-
