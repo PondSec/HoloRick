@@ -44,6 +44,7 @@ let memoryFilters = { q: '', scope: 'all', archived: false };
 let editingMemoryId = '';
 let onboardingStepIndex = 0;
 const guestTokenKey = 'holo_rick_guest_token';
+const publicWorkspaceModelName = 'MARC A2';
 
 const modeLabels = {
   holo: 'Holo Rick',
@@ -768,13 +769,23 @@ function workspaceEmpty() {
   return `<div class="workspace-empty"><strong>Noch kein Artifact.</strong><p>Wenn Holo Rick Dateien, Code, Tabellen oder Vorschauen erzeugt, erscheinen sie hier.</p></div>`;
 }
 
+function workspaceModelLabel(model) {
+  return String(model || '').trim() ? publicWorkspaceModelName : '';
+}
+
+function workspaceSafeText(value) {
+  return String(value ?? '')
+    .replace(/\b(?:openai\/)?gpt(?:[-_ ][a-z0-9.]+)+\b/gi, publicWorkspaceModelName)
+    .replace(/\bGPT[- ]?Modell\b/gi, publicWorkspaceModelName);
+}
+
 function renderAnswerTab() {
   if (!selectedAnswer) return workspaceEmpty();
   const meta = parseMeta(selectedAnswer.meta);
   const usage = meta.efficiency || {};
   const stats = usage.model ? `
     <div class="usage-grid">
-      <span>Modell</span><strong>${esc(usage.model)}</strong>
+      <span>Modell</span><strong>${esc(workspaceModelLabel(usage.model))}</strong>
       <span>Cache</span><strong>${esc(usage.cache_status || 'n/a')}</strong>
       <span>Input</span><strong>${esc(usage.input_tokens || 0)} Token</strong>
       <span>Output</span><strong>${esc(usage.output_tokens || 0)} Token</strong>
@@ -860,10 +871,10 @@ function renderSourcesTab() {
   const uncertainties = md.uncertainties || [];
   const checked = md.checked_items || [];
   const sourceHtml = sources.length
-    ? sources.map(s => `<div class="source-row"><strong>${esc(s.title || 'Quelle')}</strong><span>${esc(s.type || 'manual')}</span>${s.excerpt ? `<p>${esc(s.excerpt)}</p>` : ''}</div>`).join('')
+    ? sources.map(s => `<div class="source-row"><strong>${esc(workspaceSafeText(s.title || 'Quelle'))}</strong><span>${esc(s.type || 'manual')}</span>${s.excerpt ? `<p>${esc(workspaceSafeText(s.excerpt))}</p>` : ''}</div>`).join('')
     : '<p class="muted">Für diese Antwort wurden keine Quellen gespeichert.</p>';
   const workHtml = work.length
-    ? work.map(w => `<div class="work-row ${esc(w.status || 'done')}"><strong>${esc(w.label || 'Schritt')}</strong><span>${esc(w.status || 'done')}</span>${w.detail ? `<p>${esc(w.detail)}</p>` : ''}</div>`).join('')
+    ? work.map(w => `<div class="work-row ${esc(w.status || 'done')}"><strong>${esc(workspaceSafeText(w.label || 'Schritt'))}</strong><span>${esc(w.status || 'done')}</span>${w.detail ? `<p>${esc(workspaceSafeText(w.detail))}</p>` : ''}</div>`).join('')
     : '<p class="muted">Kein Arbeitsnachweis vorhanden.</p>';
   return `
     <div class="workspace-section">
@@ -871,9 +882,9 @@ function renderSourcesTab() {
       <h3>Arbeitsnachweis</h3>${workHtml}
       <h3>Unsicherheit</h3>
       <div class="confidence ${esc(md.confidence || 'medium')}">${esc(md.confidence || 'medium')}</div>
-      ${uncertainties.length ? `<ul class="plain-list">${uncertainties.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '<p class="muted">Keine Unsicherheiten gespeichert.</p>'}
+      ${uncertainties.length ? `<ul class="plain-list">${uncertainties.map(x => `<li>${esc(workspaceSafeText(x))}</li>`).join('')}</ul>` : '<p class="muted">Keine Unsicherheiten gespeichert.</p>'}
       <h3>Kontext</h3>
-      ${checked.length ? `<ul class="plain-list">${checked.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '<p class="muted">Kein geprüfter Kontext gespeichert.</p>'}
+      ${checked.length ? `<ul class="plain-list">${checked.map(x => `<li>${esc(workspaceSafeText(x))}</li>`).join('')}</ul>` : '<p class="muted">Kein geprüfter Kontext gespeichert.</p>'}
     </div>`;
 }
 
