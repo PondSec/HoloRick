@@ -2,7 +2,7 @@
   "schema": "holo-rick.integrity-manifest.v1",
   "project": "Holo Rick",
   "version": "1",
-  "created_at": "2026-06-30T13:12:17Z",
+  "created_at": "2026-06-30T13:25:25Z",
   "hash_algorithm": "sha256",
   "signature_algorithm": "ed25519",
   "files": [
@@ -218,7 +218,7 @@
     },
     {
       "path": "static/app.js",
-      "sha256": "703e252df985c19a577305d60371ed3435f555723b4322148a027f7e267a54f0",
+      "sha256": "827a5187eb98062cb32ac73b73e75e0c23ec540566418dfdb400fa33f7878705",
       "critical": false
     },
     {
@@ -312,7 +312,7 @@
       "signer_id": "pondsec-root-2026-06-local-signing",
       "purpose": "integrity_manifest",
       "algorithm": "ed25519",
-      "signature": "U44bGSADkG2rPSCFjR1LOYU1d3VIcigUDI63YpCGqo2NhsIGCBNwUdoqm+ZHd8/dGmxKWpTtIgr8cAPyxgEpCg=="
+      "signature": "fvgLV8lVkBC6Y0PhzJY3EnMPNNYus129jMqTm6u/fHHVZO9nq5ej+XpXJLpU6oEvRMildotYXllecIz8giBpBQ=="
     }
   ]
 }
