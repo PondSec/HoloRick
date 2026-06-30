@@ -217,6 +217,15 @@ function esc(s) {
     .replaceAll("'", '&#039;');
 }
 
+function brandLogoMarkup(className = 'brand-logo-inline') {
+  const src = document.querySelector('.brand-mark')?.getAttribute('src') || '/static/brand/pondsec-p-icon-64.png';
+  return `<img class="${esc(className)}" src="${esc(src)}" alt="" aria-hidden="true">`;
+}
+
+function assistantAvatarMarkup() {
+  return `<div class="avatar h">${brandLogoMarkup('avatar-logo')}</div>`;
+}
+
 function plainTextToHtml(text) {
   return `<p>${esc(text).replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>')}</p>`;
 }
@@ -289,26 +298,396 @@ function showChatSurface() {
 }
 
 function showProjectsSurface() {
+  unmountHoloNeuralCore();
   messagesEl.classList.add('hidden');
   form.classList.add('hidden');
   $('#projectsView')?.classList.remove('hidden');
 }
 
+
+let holoNeuralCore = null;
+
+class HoloNeuralCore {
+  constructor(root) {
+    this.root = root;
+    this.canvas = document.createElement('canvas');
+    this.ctx = this.canvas.getContext('2d', { alpha: true });
+    this.root.innerHTML = '';
+    this.root.appendChild(this.canvas);
+
+    this.state = 'idle';
+    this.time = 0;
+    this.dpr = 1;
+    this.width = 0;
+    this.height = 0;
+    this.points = [];
+    this.synapses = [];
+    this.signals = [];
+    this.bursts = [];
+    this.energy = 0.22;
+    this.targetEnergy = 0.22;
+    this.lastTick = 0;
+
+    this.settings = {
+      pointCount: 620,
+      synapseCount: 1850,
+      lineDistance: 0.18,
+      neighborLimit: 5
+    };
+
+    this.resize = this.resize.bind(this);
+    this.tick = this.tick.bind(this);
+
+    window.addEventListener('resize', this.resize, { passive: true });
+    this.resize();
+    this.createNetwork();
+    this.raf = requestAnimationFrame(this.tick);
+  }
+
+  setState(state) {
+    this.state = state || 'idle';
+    this.root.dataset.state = this.state;
+
+    if (this.state === 'thinking') {
+      this.targetEnergy = 0.64;
+      this.spawnBurst(8);
+      this.spawnSignals(18);
+    } else if (this.state === 'speaking') {
+      this.targetEnergy = 0.82;
+      this.spawnBurst(12);
+      this.spawnSignals(28);
+    } else {
+      this.targetEnergy = 0.22;
+    }
+  }
+
+  resize() {
+    const rect = this.root.getBoundingClientRect();
+    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.width = Math.max(1, Math.floor(rect.width));
+    this.height = Math.max(1, Math.floor(rect.height));
+    this.canvas.width = Math.floor(this.width * this.dpr);
+    this.canvas.height = Math.floor(this.height * this.dpr);
+    this.canvas.style.width = `${this.width}px`;
+    this.canvas.style.height = `${this.height}px`;
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+  }
+
+  createNetwork() {
+    const random = this.seededRandom(31337);
+    const count = this.settings.pointCount;
+    this.points = [];
+
+    for (let i = 0; i < count; i++) {
+      const y = 1 - (i / Math.max(1, count - 1)) * 2;
+      const ring = Math.sqrt(Math.max(0, 1 - y * y));
+      const theta = i * Math.PI * (3 - Math.sqrt(5)) + random() * 0.05;
+      const shell = 0.72 + Math.pow(random(), 2.2) * 0.24;
+      const x = Math.cos(theta) * ring * shell;
+      const z = Math.sin(theta) * ring * shell;
+
+      this.points.push({
+        x, y, z,
+        ox: x, oy: y, oz: z,
+        size: 0.48 + random() * 0.82,
+        phase: random() * Math.PI * 2,
+        speed: 0.32 + random() * 0.82,
+        cluster: Math.floor((theta % (Math.PI * 2)) / (Math.PI * 2) * 12),
+        charge: random() * 0.45
+      });
+    }
+
+    this.synapses = [];
+    const seen = new Set();
+    for (let i = 0; i < count && this.synapses.length < this.settings.synapseCount; i++) {
+      const a = this.points[i];
+      const nearest = [];
+      for (let j = 0; j < count; j++) {
+        if (i === j) continue;
+        const b = this.points[j];
+        const dx = a.x - b.x;
+        const dy = a.y - b.y;
+        const dz = a.z - b.z;
+        const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (d < this.settings.lineDistance + (a.cluster === b.cluster ? 0.065 : 0)) {
+          nearest.push({ j, d });
+        }
+      }
+
+      nearest
+        .sort((p, q) => p.d - q.d)
+        .slice(0, this.settings.neighborLimit)
+        .forEach(n => {
+          const key = i < n.j ? `${i}:${n.j}` : `${n.j}:${i}`;
+          if (seen.has(key) || this.synapses.length >= this.settings.synapseCount) return;
+          seen.add(key);
+          this.synapses.push({
+            a: i,
+            b: n.j,
+            strength: Math.max(0, 1 - n.d / 0.24),
+            phase: random() * Math.PI * 2,
+            speed: 0.28 + random() * 1.15,
+            offset: random()
+          });
+        });
+    }
+  }
+
+  seededRandom(seed) {
+    let s = seed >>> 0;
+    return () => {
+      s = (s * 1664525 + 1013904223) >>> 0;
+      return s / 4294967296;
+    };
+  }
+
+  spawnBurst(amount = 12) {
+    for (let i = 0; i < amount; i++) {
+      this.bursts.push({
+        cluster: Math.floor(Math.random() * 12),
+        life: 0,
+        maxLife: 0.95 + Math.random() * 0.95,
+        delay: Math.random() * 0.25,
+        strength: 0.34 + Math.random() * 0.58
+      });
+    }
+  }
+
+  spawnSignals(amount = 8) {
+    if (!this.synapses.length) return;
+    for (let i = 0; i < amount; i++) {
+      const linkIndex = Math.floor(Math.random() * this.synapses.length);
+      this.signals.push({
+        linkIndex,
+        progress: Math.random() * 0.18,
+        speed: 0.34 + Math.random() * 0.5 + this.energy * 0.22,
+        delay: Math.random() * 0.22,
+        direction: Math.random() > 0.5 ? 1 : -1
+      });
+    }
+  }
+
+  tick(now) {
+    if (!this.lastTick) this.lastTick = now;
+    const dt = Math.min(0.05, (now - this.lastTick) / 1000);
+    this.lastTick = now;
+    this.time = now * 0.001;
+    this.energy += (this.targetEnergy - this.energy) * 0.035;
+
+    if ((this.state === 'thinking' || this.state === 'speaking') && Math.random() < this.energy * 0.11) {
+      this.spawnBurst(this.state === 'speaking' ? 2 : 1);
+      this.spawnSignals(this.state === 'speaking' ? 3 : 2);
+    }
+
+    this.updateBursts(dt);
+    this.updateSignals(dt);
+    this.draw();
+    this.raf = requestAnimationFrame(this.tick);
+  }
+
+  updateBursts(dt) {
+    this.bursts = this.bursts.filter(b => {
+      b.life += dt;
+      return b.life < b.maxLife + b.delay;
+    });
+  }
+
+  updateSignals(dt) {
+    this.signals = this.signals.filter(signal => {
+      if (signal.delay > 0) {
+        signal.delay -= dt;
+        return true;
+      }
+      signal.progress += dt * signal.speed;
+      return signal.progress < 1.12;
+    });
+  }
+
+  pointActivation(point, signalActivation = 0) {
+    let activation = 0;
+    for (const burst of this.bursts) {
+      if (burst.life < burst.delay) continue;
+      const clusterDelta = Math.abs(point.cluster - burst.cluster);
+      if (clusterDelta > 1 && clusterDelta < 11) continue;
+      const age = (burst.life - burst.delay) / burst.maxLife;
+      const wave = Math.sin(Math.max(0, Math.min(1, age)) * Math.PI);
+      activation += wave * burst.strength;
+    }
+    const ambient = (Math.sin(this.time * point.speed + point.phase) + 1) * 0.5;
+    return Math.min(1.35, activation + signalActivation + ambient * this.energy * 0.24 + point.charge * this.energy * 0.18);
+  }
+
+  projectPoint(point, t) {
+    const rotation = t * (0.035 + this.energy * 0.026);
+    const tilt = 0.22 + Math.sin(t * 0.08) * 0.025;
+    const cosY = Math.cos(rotation);
+    const sinY = Math.sin(rotation);
+    const cosX = Math.cos(tilt);
+    const sinX = Math.sin(tilt);
+
+    const drift = 0.012 + this.energy * 0.014;
+    const x0 = point.ox + Math.sin(t * point.speed + point.phase) * drift;
+    const y0 = point.oy + Math.cos(t * point.speed * 0.8 + point.phase) * drift;
+    const z0 = point.oz;
+
+    const x1 = x0 * cosY - z0 * sinY;
+    const z1 = x0 * sinY + z0 * cosY;
+    const y1 = y0 * cosX - z1 * sinX;
+    const z2 = y0 * sinX + z1 * cosX;
+
+    return { x: x1, y: y1, z: z2, depth: (z2 + 1.05) / 2.1 };
+  }
+
+  draw() {
+    const ctx = this.ctx;
+    const w = this.width;
+    const h = this.height;
+    const cx = w / 2;
+    const cy = h / 2;
+    const radius = Math.min(w, h) * 0.32;
+
+    ctx.clearRect(0, 0, w, h);
+
+    const projected = this.points.map((point, index) => {
+      const p = this.projectPoint(point, this.time);
+      return {
+        x: cx + p.x * radius,
+        y: cy + p.y * radius,
+        z: p.z,
+        depth: Math.max(0, Math.min(1, p.depth)),
+        point,
+        index
+      };
+    });
+
+    const linkSignals = new Float32Array(this.synapses.length);
+    const pointSignals = new Float32Array(this.points.length);
+    for (const signal of this.signals) {
+      if (signal.delay > 0) continue;
+      const link = this.synapses[signal.linkIndex];
+      if (!link) continue;
+      const pulse = Math.sin(Math.max(0, Math.min(1, signal.progress)) * Math.PI);
+      linkSignals[signal.linkIndex] = Math.max(linkSignals[signal.linkIndex], pulse);
+      pointSignals[link.a] = Math.max(pointSignals[link.a], pulse * 0.72);
+      pointSignals[link.b] = Math.max(pointSignals[link.b], pulse * 0.72);
+    }
+
+    for (let i = 0; i < this.synapses.length; i++) {
+      const link = this.synapses[i];
+      const a = projected[link.a];
+      const b = projected[link.b];
+      const activity = Math.pow((Math.sin(this.time * link.speed + link.phase) + 1) * 0.5, 3.5);
+      const signal = linkSignals[i];
+      const depth = 0.38 + ((a.depth + b.depth) * 0.5) * 0.42;
+      const alpha = (0.034 + link.strength * 0.072) * depth + activity * (0.022 + this.energy * 0.095) + signal * 0.46;
+      if (alpha < 0.026) continue;
+
+      ctx.strokeStyle = `rgba(232,232,235,${Math.min(0.68, alpha)})`;
+      ctx.lineWidth = 0.38 + link.strength * 0.36 + signal * 1.08;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+
+      if (signal > 0.04) {
+        const head = signal.direction > 0 ? signal.progress : 1 - signal.progress;
+        const start = Math.max(0, head - 0.09);
+        const end = Math.min(1, head + 0.035);
+        ctx.strokeStyle = `rgba(255,255,255,${Math.min(0.76, signal * 0.68)})`;
+        ctx.lineWidth = 1.1 + signal * 0.6;
+        ctx.beginPath();
+        ctx.moveTo(a.x + (b.x - a.x) * start, a.y + (b.y - a.y) * start);
+        ctx.lineTo(a.x + (b.x - a.x) * end, a.y + (b.y - a.y) * end);
+        ctx.stroke();
+      }
+    }
+
+    projected.sort((a, b) => a.z - b.z);
+    for (const p of projected) {
+      const act = this.pointActivation(p.point, pointSignals[p.index] || 0);
+      const size = p.point.size * (0.7 + p.depth * 0.48) + act * 1.06;
+      const alpha = Math.min(0.82, 0.18 + p.depth * 0.26 + act * 0.3);
+
+      ctx.fillStyle = `rgba(244,244,245,${alpha})`;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  destroy() {
+    cancelAnimationFrame(this.raf);
+    window.removeEventListener('resize', this.resize);
+  }
+}
+
+function mountHoloNeuralCore(host = document.getElementById('holoNeuralCore')) {
+  if (!host) return;
+  if (holoNeuralCore?.root === host) return;
+  if (holoNeuralCore) holoNeuralCore.destroy();
+  holoNeuralCore = new HoloNeuralCore(host);
+}
+
+function unmountHoloNeuralCore(clearState = true) {
+  if (holoNeuralCore) {
+    holoNeuralCore.destroy();
+    holoNeuralCore = null;
+  }
+  document.getElementById('chatNeuralCore')?.classList.remove('active');
+  if (clearState) document.body.classList.remove('holo-neural-thinking', 'holo-neural-speaking');
+}
+
+function setHoloNeuralState(state, label) {
+  const nextState = state || 'idle';
+  const emptyHost = document.getElementById('holoNeuralCore');
+  const chatHost = document.getElementById('chatNeuralCore');
+  const host = emptyHost || (nextState !== 'idle' ? chatHost : null);
+
+  if (host) {
+    mountHoloNeuralCore(host);
+    holoNeuralCore?.setState(nextState);
+  } else if (nextState === 'idle' && holoNeuralCore?.root === chatHost) {
+    holoNeuralCore.setState(nextState);
+  }
+
+  if (chatHost) {
+    chatHost.classList.toggle('active', host === chatHost && nextState !== 'idle');
+  }
+
+  document.body.classList.toggle('holo-neural-thinking', nextState === 'thinking');
+  document.body.classList.toggle('holo-neural-speaking', nextState === 'speaking');
+
+  if (nextState === 'idle' && holoNeuralCore?.root === chatHost) {
+    setTimeout(() => {
+      if (!document.body.classList.contains('holo-neural-thinking') && !document.body.classList.contains('holo-neural-speaking') && holoNeuralCore?.root === chatHost) {
+        unmountHoloNeuralCore(false);
+      }
+    }, 420);
+  }
+}
+
+
 function renderEmpty() {
   showChatSurface();
+  unmountHoloNeuralCore();
   const chips = quickPrompts.map(item => `<button type="button" class="prompt-chip" data-prompt="${esc(item.prompt)}">${esc(item.label)}</button>`).join('');
   messagesEl.innerHTML = `
-    <div class="empty">
-      <div class="orb">H</div>
+    <div class="empty neural-empty">
+      <div class="neural-core" id="holoNeuralCore" aria-hidden="true"></div>
+      <div class="neural-logo-wrap">${brandLogoMarkup('neural-logo')}</div>
       <h1>Wobei kann ich helfen?</h1>
       <p>Ein ruhiger Workspace für präzise Antworten, Projektkontext und Dateien.</p>
       <div class="prompt-grid">${chips}</div>
     </div>`;
+  mountHoloNeuralCore();
+  setHoloNeuralState('idle');
   messagesEl.querySelectorAll('.prompt-chip').forEach(btn => {
     btn.onclick = () => {
       input.value = btn.dataset.prompt || '';
       resize();
       input.focus();
+      setHoloNeuralState('thinking');
+      setTimeout(() => setHoloNeuralState('idle'), 900);
     };
   });
 }
@@ -603,9 +982,14 @@ function enhanceContent(root) {
 }
 
 function addMsg(role, content, meta = {}, contentHtml = '', messageId = null, extras = {}) {
+  if (messagesEl.children.length === 1 && messagesEl.firstElementChild?.classList.contains('empty')) {
+    unmountHoloNeuralCore(false);
+    messagesEl.innerHTML = '';
+  }
+
   const row = document.createElement('div');
   row.className = `msg ${role}`;
-  const avatar = role === 'assistant' ? '<div class="avatar h">H</div>' : '<div class="avatar u">Du</div>';
+  const avatar = role === 'assistant' ? assistantAvatarMarkup() : '<div class="avatar u">Du</div>';
   const html = role === 'assistant' ? (contentHtml || plainTextToHtml(content)) : plainTextToHtml(content);
   const parsedMeta = parseMeta(meta);
   const generatedImage = role === 'assistant' ? generatedImageMarkup(parsedMeta) : '';
@@ -1191,7 +1575,7 @@ async function newChat() {
 function thinkingMarkup() {
   return `
     <div class="thinking-state" aria-label="Holo Rick denkt">
-      <span class="thinking-orb" aria-hidden="true"></span>
+      <span class="thinking-mark" aria-hidden="true">${brandLogoMarkup('thinking-logo')}</span>
       <span>${aiMode === 'deep' ? 'Analysiere gründlich...' : 'Denke nach...'}</span>
     </div>`;
 }
@@ -1206,9 +1590,11 @@ async function send() {
     return;
   }
   loading = true;
+  setHoloNeuralState('thinking');
   $('#sendBtn').disabled = true;
   const echoFiles = selectedFiles.map(f => ({ name: f.name, mime: f.type }));
   addMsg('user', text, { uploads: echoFiles });
+  setHoloNeuralState('thinking');
   input.value = '';
   resize();
   attachmentsEl.innerHTML = '';
@@ -1225,13 +1611,14 @@ async function send() {
 
   const wait = document.createElement('div');
   wait.className = 'msg assistant';
-  wait.innerHTML = `<div class="avatar h">H</div><div class="bubble"><div class="content typing">${thinkingMarkup()}</div></div>`;
+  wait.innerHTML = `${assistantAvatarMarkup()}<div class="bubble"><div class="content typing">${thinkingMarkup()}</div></div>`;
   messagesEl.appendChild(wait);
   scrollBottom();
 
   try {
     const d = await api('/api/send', { method: 'POST', body: fd });
     wait.remove();
+    setHoloNeuralState('speaking');
     addMsg('assistant', d.assistant_message.content, d.assistant_message.meta || {}, d.assistant_message.content_html, d.assistant_message.id, d.assistant_message);
     selectedAnswer = {
       id: d.assistant_message.id,
@@ -1259,6 +1646,9 @@ async function send() {
   } finally {
     loading = false;
     $('#sendBtn').disabled = false;
+    setTimeout(() => {
+      if (!loading) setHoloNeuralState('idle');
+    }, 700);
     input.focus();
   }
 }
@@ -1389,10 +1779,11 @@ async function runSmartAction(action, sourceMessageId, sourceContent) {
     return;
   }
   loading = true;
+  setHoloNeuralState('thinking');
   $('#sendBtn').disabled = true;
   const wait = document.createElement('div');
   wait.className = 'msg assistant';
-  wait.innerHTML = `<div class="avatar h">H</div><div class="bubble"><div class="content typing">Arbeite aus...</div></div>`;
+  wait.innerHTML = `${assistantAvatarMarkup()}<div class="bubble"><div class="content typing">Arbeite aus...</div></div>`;
   messagesEl.appendChild(wait);
   scrollBottom();
   try {
@@ -1402,6 +1793,7 @@ async function runSmartAction(action, sourceMessageId, sourceContent) {
       body: JSON.stringify({ action, source_message_id: sourceMessageId })
     });
     wait.remove();
+    setHoloNeuralState('speaking');
     addMsg('user', d.user_message.content, d.user_message.meta, '', d.user_message.id);
     addMsg('assistant', d.assistant_message.content, d.assistant_message.meta || {}, d.assistant_message.content_html, d.assistant_message.id, d.assistant_message);
     await loadChats();
@@ -1411,6 +1803,9 @@ async function runSmartAction(action, sourceMessageId, sourceContent) {
   } finally {
     loading = false;
     $('#sendBtn').disabled = false;
+    setTimeout(() => {
+      if (!loading) setHoloNeuralState('idle');
+    }, 700);
     input.focus();
   }
 }
@@ -1906,3 +2301,18 @@ async function boot() {
 }
 
 boot().catch(e => toast(e.error || String(e)));
+
+
+// Optional public hooks for the chat pipeline.
+// Use these from streaming code if you want the sphere to react exactly while tokens arrive:
+// window.HoloRickNeural.thinking();
+// window.HoloRickNeural.speaking();
+// window.HoloRickNeural.idle();
+const holoRickNeuralApi = {
+  thinking: () => setHoloNeuralState('thinking'),
+  speaking: () => setHoloNeuralState('speaking'),
+  idle: () => setHoloNeuralState('idle')
+};
+window.HoloRickNeural = holoRickNeuralApi;
+globalThis.HoloRickNeural = holoRickNeuralApi;
+document.documentElement.dataset.holoNeuralApi = 'ready';

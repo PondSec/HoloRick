@@ -1,8 +1,8 @@
 {
   "schema": "holo-rick.integrity-manifest.v1",
   "project": "Holo Rick",
-  "version": "security-bootstrap-2e5466b",
-  "created_at": "2026-06-24T07:59:07Z",
+  "version": "1",
+  "created_at": "2026-06-30T13:12:17Z",
   "hash_algorithm": "sha256",
   "signature_algorithm": "ed25519",
   "files": [
@@ -208,7 +208,7 @@
     },
     {
       "path": "security/trust-policy.json",
-      "sha256": "d92ea47bbeb9ae692a8ceab721ab2bbd22fb7f50934626570efc26eae4765ad5",
+      "sha256": "1ef95b0c1c3891959d34c98f70f3de5c84f3b294d774c2d763d1a6c0f33183c4",
       "critical": true
     },
     {
@@ -218,7 +218,7 @@
     },
     {
       "path": "static/app.js",
-      "sha256": "8c6375a81cad99388a568ec94576a7c69ddfa5769523c9b35138d7819e54cfe5",
+      "sha256": "703e252df985c19a577305d60371ed3435f555723b4322148a027f7e267a54f0",
       "critical": false
     },
     {
@@ -288,12 +288,12 @@
     },
     {
       "path": "static/style.css",
-      "sha256": "04658cdacbb36b1d797e7b628a3305ec98e6a15ea1d79de28362d66213564ef0",
+      "sha256": "3d06941b3a6fe051705a31c6027a8c1813bc1158ac4965a94b1017ee497edfad",
       "critical": false
     },
     {
       "path": "templates/index.html",
-      "sha256": "17144c7bd9104a5761ef8530bdf6b181ce08982c268f365763babf7efe967ac5",
+      "sha256": "ace09f778ba56f1acc832fe6b8292cbd094b6827bb1171c5a26d8b864beb017e",
       "critical": false
     },
     {
@@ -309,10 +309,10 @@
   ],
   "signatures": [
     {
-      "signer_id": "pondsec-root-2026-06-bootstrap",
+      "signer_id": "pondsec-root-2026-06-local-signing",
       "purpose": "integrity_manifest",
       "algorithm": "ed25519",
-      "signature": "+LoqUSNaOCRUNWHlrohkTw2fKep4cPSP+k3UlMS/LNu+Sa3gE4IR13QGi+XM7ZXN0XiRXMHAcmPvA1KnKWYFDQ=="
+      "signature": "U44bGSADkG2rPSCFjR1LOYU1d3VIcigUDI63YpCGqo2NhsIGCBNwUdoqm+ZHd8/dGmxKWpTtIgr8cAPyxgEpCg=="
     }
   ]
 }
